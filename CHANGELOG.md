@@ -2,6 +2,12 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
+## [0.1.1] - 2026-02-22
+
+### Fixed
+- Webview memory map not loading due to incorrect resource paths in packaged extension
+- Excluded large sample files from published package
+
 ## [0.1.0] - 2026-02-22
 
 ### Added

@@ -2,7 +2,7 @@
   "name": "gcc-map-view",
   "displayName": "GCC Map View",
   "description": "Visualize GCC linker scripts (.ld) and map files (.map) with a tree view and graphical memory map",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "author": "Rob Derr <robjderr@gmail.com>",
   "publisher": "RobDerr",

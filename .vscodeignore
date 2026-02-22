@@ -3,8 +3,9 @@
 .claude/**
 src/**
 node_modules/**
+samples/**
 .gitignore
 tsconfig.json
-**/*.map
 **/*.ts
 !out/**
+out/**/*.map

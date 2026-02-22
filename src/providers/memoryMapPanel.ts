@@ -48,8 +48,7 @@ export class MemoryMapPanel {
                 enableScripts: true,
                 retainContextWhenHidden: true,
                 localResourceRoots: [
-                    vscode.Uri.file(path.join(extensionPath, 'src', 'webview')),
-                    vscode.Uri.file(path.join(extensionPath, 'out', 'webview')),
+                    vscode.Uri.file(path.join(extensionPath, 'webview')),
                 ],
             }
         );
@@ -97,9 +96,9 @@ export class MemoryMapPanel {
         const nonce = getNonce();
 
         // Resolve resource URIs
-        const cssPath = path.join(this.extensionPath, 'src', 'webview', 'memoryMap.css');
-        const jsPath = path.join(this.extensionPath, 'src', 'webview', 'memoryMap.js');
-        const htmlPath = path.join(this.extensionPath, 'src', 'webview', 'memoryMap.html');
+        const cssPath = path.join(this.extensionPath, 'webview', 'memoryMap.css');
+        const jsPath = path.join(this.extensionPath, 'webview', 'memoryMap.js');
+        const htmlPath = path.join(this.extensionPath, 'webview', 'memoryMap.html');
 
         const cssUri = webview.asWebviewUri(vscode.Uri.file(cssPath));
         const scriptUri = webview.asWebviewUri(vscode.Uri.file(jsPath));
