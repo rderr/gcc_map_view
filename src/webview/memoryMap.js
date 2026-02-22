@@ -3,6 +3,7 @@
     const vscode = acquireVsCodeApi();
     const MIN_SECTION_HEIGHT = 20;
     const REGION_BAR_HEIGHT = 400;
+    const SYM_COLOR_COUNT = 12;
 
     let layoutData = null;
 
@@ -88,8 +89,14 @@
                 var sec = sections[i];
                 var heightPx = Math.max(MIN_SECTION_HEIGHT, (sec.size / totalForScaling) * REGION_BAR_HEIGHT);
 
+                // Filter symbols with size > 0
+                var symbols = (sec.symbols || []).filter(function (s) { return s.size > 0; });
+
                 var block = document.createElement('div');
                 block.className = 'section-block ' + getSectionColorClass(sec.name);
+                if (symbols.length > 0) {
+                    block.className += ' has-symbols';
+                }
                 block.style.height = heightPx + 'px';
                 block.setAttribute('data-section', sec.name);
 
@@ -98,6 +105,45 @@
                 label.textContent = sec.name + ' (' + formatSize(sec.size) + ')';
                 block.appendChild(label);
 
+                // Render symbol sub-blocks as a horizontal row
+                if (symbols.length > 0) {
+                    var symRow = document.createElement('div');
+                    symRow.className = 'symbol-row';
+
+                    var totalSymSize = symbols.reduce(function (s, sym) { return s + sym.size; }, 0);
+
+                    for (var si = 0; si < symbols.length; si++) {
+                        var sym = symbols[si];
+                        var widthPct = (sym.size / totalSymSize) * 100;
+
+                        var symBlock = document.createElement('div');
+                        symBlock.className = 'symbol-block sym-color-' + (si % SYM_COLOR_COUNT);
+                        symBlock.style.width = widthPct + '%';
+                        symBlock.setAttribute('data-symbol', sym.name);
+                        symBlock.setAttribute('data-section', sec.name);
+
+                        // Click: select symbol
+                        symBlock.addEventListener('click', (function (symbolName, sectionName) {
+                            return function (e) {
+                                e.stopPropagation();
+                                vscode.postMessage({ type: 'selectSymbol', symbol: symbolName, section: sectionName });
+                            };
+                        })(sym.name, sec.name));
+
+                        // Tooltip on hover
+                        symBlock.addEventListener('mouseenter', (function (symbol) {
+                            return function (e) { showSymbolTooltip(e, symbol); };
+                        })(sym));
+                        symBlock.addEventListener('mouseleave', function () { hideTooltip(); });
+                        symBlock.addEventListener('mousemove', function (e) { moveTooltip(e); });
+
+                        symRow.appendChild(symBlock);
+                    }
+
+                    block.appendChild(symRow);
+                }
+
+                // Section-level click (only fires if not caught by a symbol)
                 block.addEventListener('click', (function (sectionName) {
                     return function () {
                         vscode.postMessage({ type: 'selectSection', section: sectionName });
@@ -107,7 +153,6 @@
                 block.addEventListener('mouseenter', (function (section) {
                     return function (e) { showTooltip(e, section); };
                 })(sec));
-
                 block.addEventListener('mouseleave', function () { hideTooltip(); });
                 block.addEventListener('mousemove', function (e) { moveTooltip(e); });
 
@@ -129,7 +174,7 @@
 
             col.appendChild(bar);
 
-            // Usage bar (built with DOM, not innerHTML)
+            // Usage bar
             var usageBarContainer = document.createElement('div');
             usageBarContainer.className = 'usage-bar-container';
             var usageBarFill = document.createElement('div');
@@ -156,6 +201,19 @@
         moveTooltip(e);
     }
 
+    function showSymbolTooltip(e, symbol) {
+        e.stopPropagation();
+        var tooltip = document.getElementById('tooltip');
+        if (!tooltip) { return; }
+        tooltip.innerHTML =
+            '<div class="tooltip-title">' + escapeHtml(symbol.name) + '</div>' +
+            'Address: ' + formatHex(symbol.address) + '<br>' +
+            'Size: ' + formatSize(symbol.size) +
+            (symbol.sourceFile ? '<br>Source: ' + escapeHtml(symbol.sourceFile) : '');
+        tooltip.classList.add('visible');
+        moveTooltip(e);
+    }
+
     function moveTooltip(e) {
         var tooltip = document.getElementById('tooltip');
         if (!tooltip) { return; }
@@ -168,16 +226,37 @@
         if (tooltip) { tooltip.classList.remove('visible'); }
     }
 
-    function highlightSection(sectionName) {
-        document.querySelectorAll('.section-block').forEach(function (el) {
+    function clearHighlights() {
+        document.querySelectorAll('.highlighted').forEach(function (el) {
             el.classList.remove('highlighted');
         });
+    }
+
+    function highlightSection(sectionName) {
+        clearHighlights();
         if (sectionName) {
             var selector = '.section-block[data-section="' + CSS.escape(sectionName) + '"]';
             document.querySelectorAll(selector).forEach(function (el) {
                 el.classList.add('highlighted');
                 el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             });
+        }
+    }
+
+    function highlightSymbol(symbolName, sectionName) {
+        clearHighlights();
+        if (symbolName) {
+            // Match by both symbol name and section to handle duplicate names across sections
+            var blocks = document.querySelectorAll('.symbol-block');
+            for (var i = 0; i < blocks.length; i++) {
+                var b = blocks[i];
+                if (b.getAttribute('data-symbol') === symbolName &&
+                    (!sectionName || b.getAttribute('data-section') === sectionName)) {
+                    b.classList.add('highlighted');
+                    b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    break;
+                }
+            }
         }
     }
 
@@ -197,6 +276,9 @@
                 break;
             case 'highlightSection':
                 highlightSection(msg.section);
+                break;
+            case 'highlightSymbol':
+                highlightSymbol(msg.symbol, msg.section);
                 break;
         }
     });

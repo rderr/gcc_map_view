@@ -39,6 +39,15 @@ export function activate(context: vscode.ExtensionContext) {
                     goToLine(item.section.sourceLine);
                 }
             });
+
+            // Webview -> tree: click symbol in webview reveals in tree and jumps in editor
+            panel.setOnSymbolSelected((symbolName, sectionName) => {
+                const item = treeProvider.findSymbolItem(symbolName, sectionName);
+                if (item) {
+                    treeView.reveal(item, { select: true, focus: false, expand: true });
+                    goToLine(item.symbol.sourceLine);
+                }
+            });
         })
     );
 
@@ -71,13 +80,16 @@ export function activate(context: vscode.ExtensionContext) {
     // Command: selectItem — handles clicks on section/symbol tree items
     context.subscriptions.push(
         vscode.commands.registerCommand('gccMapView.selectItem', (item: SectionTreeItem | SymbolTreeItem) => {
+            const panel = MemoryMapPanel.getCurrent();
             if (item instanceof SectionTreeItem) {
-                const panel = MemoryMapPanel.getCurrent();
                 if (panel) {
                     panel.highlightSection(item.section.name);
                 }
                 goToLine(item.section.sourceLine);
             } else if (item instanceof SymbolTreeItem) {
+                if (panel && item.symbol.section) {
+                    panel.highlightSymbol(item.symbol.name, item.symbol.section);
+                }
                 goToLine(item.symbol.sourceLine);
             }
         })

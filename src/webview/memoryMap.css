@@ -114,6 +114,61 @@ h1 {
 .section-vectors  { background: #7d3c98; }
 .section-default  { background: #555; }
 
+/* Section block: switch to vertical flex to hold symbol sub-blocks */
+.section-block.has-symbols {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+}
+
+.section-block.has-symbols > .section-label {
+    padding: 1px 6px;
+    flex-shrink: 0;
+}
+
+/* Symbol sub-blocks inside sections */
+.symbol-row {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+}
+
+.symbol-block {
+    cursor: pointer;
+    transition: filter 0.15s, outline 0.15s;
+    min-width: 2px;
+    position: relative;
+}
+
+.symbol-block:hover {
+    filter: brightness(1.4);
+    z-index: 2;
+}
+
+.symbol-block.highlighted {
+    outline: 2px solid var(--vscode-focusBorder, #007acc);
+    outline-offset: -1px;
+    filter: brightness(1.5);
+    z-index: 3;
+}
+
+/* Symbol color palette — 12 distinct hues */
+.sym-color-0  { background: #e6194b; }
+.sym-color-1  { background: #3cb44b; }
+.sym-color-2  { background: #ffe119; }
+.sym-color-3  { background: #4363d8; }
+.sym-color-4  { background: #f58231; }
+.sym-color-5  { background: #911eb4; }
+.sym-color-6  { background: #42d4f4; }
+.sym-color-7  { background: #f032e6; }
+.sym-color-8  { background: #bfef45; }
+.sym-color-9  { background: #fabed4; }
+.sym-color-10 { background: #469990; }
+.sym-color-11 { background: #dcbeff; }
+
 /* Tooltip */
 .tooltip {
     display: none;
