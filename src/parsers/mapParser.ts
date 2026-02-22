@@ -19,6 +19,7 @@ export function parseMap(text: string): MemoryLayout {
     let state: State = State.SCANNING;
     let currentSection: Section | undefined;
     let pendingSymbolName: string | undefined;
+    let pendingSymbolLine: number = 0;
 
     const lines = text.split('\n');
 
@@ -93,6 +94,7 @@ export function parseMap(text: string): MemoryLayout {
                         address: parseInt(outputSectionMatch[2], 16),
                         size: parseInt(outputSectionMatch[3], 16),
                         symbols: [],
+                        sourceLine: i,
                     };
                     sections.push(currentSection);
                     pendingSymbolName = undefined;
@@ -114,6 +116,7 @@ export function parseMap(text: string): MemoryLayout {
                                 address: parseInt(addrSize[1], 16),
                                 size: parseInt(addrSize[2], 16),
                                 symbols: [],
+                                sourceLine: i,
                             };
                             sections.push(currentSection);
                             pendingSymbolName = undefined;
@@ -145,6 +148,7 @@ export function parseMap(text: string): MemoryLayout {
                             size,
                             section: currentSection.name,
                             sourceFile,
+                            sourceLine: i,
                         });
                         pendingSymbolName = undefined;
                         break;
@@ -154,6 +158,7 @@ export function parseMap(text: string): MemoryLayout {
                     const nameOnly = trimmed.match(/^(\S+)\s*$/);
                     if (nameOnly && !nameOnly[1].startsWith('0x')) {
                         pendingSymbolName = nameOnly[1];
+                        pendingSymbolLine = i;
                         break;
                     }
 
@@ -169,6 +174,7 @@ export function parseMap(text: string): MemoryLayout {
                                 size: parseInt(contMatch[2], 16),
                                 section: currentSection.name,
                                 sourceFile: contMatch[3]?.trim() || undefined,
+                                sourceLine: pendingSymbolLine,
                             });
                             pendingSymbolName = undefined;
                             break;
@@ -185,6 +191,7 @@ export function parseMap(text: string): MemoryLayout {
                             address: parseInt(standaloneSym[1], 16),
                             size: 0,
                             section: currentSection.name,
+                            sourceLine: i,
                         });
                         pendingSymbolName = undefined;
                     }

@@ -42,6 +42,11 @@ export class SectionTreeItem extends vscode.TreeItem {
         );
         this.iconPath = new vscode.ThemeIcon('symbol-namespace');
         this.contextValue = 'section';
+        this.command = {
+            command: 'gccMapView.selectItem',
+            title: 'Go to section',
+            arguments: [this],
+        };
     }
 }
 
@@ -58,5 +63,10 @@ export class SymbolTreeItem extends vscode.TreeItem {
         );
         this.iconPath = new vscode.ThemeIcon('symbol-variable');
         this.contextValue = 'symbol';
+        this.command = {
+            command: 'gccMapView.selectItem',
+            title: 'Go to symbol',
+            arguments: [this],
+        };
     }
 }

@@ -14,6 +14,7 @@ export interface Section {
     region?: string;
     symbols: Symbol[];
     loadAddress?: number;
+    sourceLine?: number; // 0-based line number in the source file
 }
 
 export interface Symbol {
@@ -22,6 +23,7 @@ export interface Symbol {
     size: number;
     section?: string;
     sourceFile?: string;
+    sourceLine?: number; // 0-based line number in the map file
 }
 
 export interface MemoryLayout {

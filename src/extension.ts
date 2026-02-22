@@ -4,8 +4,8 @@ import { parseLd } from './parsers/ldParser';
 import { parseMap, isGccMapFile } from './parsers/mapParser';
 import { MemoryTreeProvider } from './providers/memoryTreeProvider';
 import { MemoryMapPanel } from './providers/memoryMapPanel';
-import { SectionTreeItem } from './providers/memoryTreeItems';
-import { MemoryLayout } from './models/types';
+import { SectionTreeItem, SymbolTreeItem } from './providers/memoryTreeItems';
+import { MemoryLayout, Section, Symbol } from './models/types';
 
 let treeProvider: MemoryTreeProvider;
 let treeView: vscode.TreeView<any>;
@@ -31,11 +31,12 @@ export function activate(context: vscode.ExtensionContext) {
             const panel = MemoryMapPanel.createOrShow(context.extensionUri.fsPath);
             panel.updateLayout(layout);
 
-            // Webview -> tree: click section in webview reveals in tree
+            // Webview -> tree + navigate: click section in webview reveals in tree and jumps in editor
             panel.setOnSectionSelected((sectionName) => {
                 const item = treeProvider.findSectionItem(sectionName);
                 if (item) {
-                    treeView.reveal(item, { select: true, focus: true });
+                    treeView.reveal(item, { select: true, focus: false });
+                    goToLine(item.section.sourceLine);
                 }
             });
         })
@@ -67,15 +68,17 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Tree -> webview: click section in tree highlights in webview
+    // Command: selectItem — handles clicks on section/symbol tree items
     context.subscriptions.push(
-        treeView.onDidChangeSelection((e) => {
-            const selected = e.selection[0];
-            if (selected instanceof SectionTreeItem) {
+        vscode.commands.registerCommand('gccMapView.selectItem', (item: SectionTreeItem | SymbolTreeItem) => {
+            if (item instanceof SectionTreeItem) {
                 const panel = MemoryMapPanel.getCurrent();
                 if (panel) {
-                    panel.highlightSection(selected.section.name);
+                    panel.highlightSection(item.section.name);
                 }
+                goToLine(item.section.sourceLine);
+            } else if (item instanceof SymbolTreeItem) {
+                goToLine(item.symbol.sourceLine);
             }
         })
     );
@@ -132,6 +135,24 @@ function parseDocument(document: vscode.TextDocument): void {
     if (panel && layout) {
         panel.updateLayout(layout);
     }
+}
+
+async function goToLine(sourceLine: number | undefined): Promise<void> {
+    const layout = treeProvider.getLayout();
+    if (sourceLine === undefined || !layout?.sourceFile) {
+        return;
+    }
+
+    const uri = vscode.Uri.file(layout.sourceFile);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preserveFocus: false,
+    });
+
+    const range = new vscode.Range(sourceLine, 0, sourceLine, 0);
+    editor.selection = new vscode.Selection(sourceLine, 0, sourceLine, 0);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 }
 
 export function deactivate() {}
