@@ -112,6 +112,29 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // Command: Search/filter symbols
+    context.subscriptions.push(
+        vscode.commands.registerCommand('gccMapView.search', async () => {
+            const value = await vscode.window.showInputBox({
+                prompt: 'Filter symbols by name',
+                placeHolder: 'Symbol name...',
+                value: treeProvider.getFilter() ?? '',
+            });
+            if (value !== undefined) {
+                treeProvider.setFilter(value || undefined);
+                vscode.commands.executeCommand('setContext', 'gccMapView.filterActive', !!value);
+            }
+        })
+    );
+
+    // Command: Clear search filter
+    context.subscriptions.push(
+        vscode.commands.registerCommand('gccMapView.clearSearch', () => {
+            treeProvider.setFilter(undefined);
+            vscode.commands.executeCommand('setContext', 'gccMapView.filterActive', false);
+        })
+    );
+
     // Parse on active editor change
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor((editor) => {
