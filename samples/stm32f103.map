@@ -1,0 +1,137 @@
+Archive member included to satisfy reference by file (symbol)
+
+Allocating common symbols
+Common symbol       size              file
+
+Discarded input sections
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x0000000008000000 0x0000000000010000 xr
+RAM              0x0000000020000000 0x0000000000005000 xrw
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+LOAD main.o
+LOAD startup_stm32f103.o
+LOAD system_stm32f1xx.o
+LOAD stm32f1xx_hal.o
+LOAD stm32f1xx_hal_gpio.o
+LOAD stm32f1xx_hal_rcc.o
+LOAD stm32f1xx_hal_uart.o
+LOAD stm32f1xx_hal_cortex.o
+
+.isr_vector     0x0000000008000000      0x10c
+                0x0000000008000000                . = ALIGN (0x4)
+ *(.isr_vector)
+ .isr_vector    0x0000000008000000      0x10c startup_stm32f103.o
+                0x0000000008000000                g_pfnVectors
+                0x000000000800010c                . = ALIGN (0x4)
+
+.text           0x000000000800010c     0x1a48
+                0x000000000800010c                . = ALIGN (0x4)
+ *(.text)
+ .text          0x000000000800010c      0x1c0 main.o
+                0x000000000800010c                main
+                0x0000000008000180                SystemClock_Config
+                0x0000000008000220                GPIO_Init
+                0x00000000080002a0                Error_Handler
+ .text          0x00000000080002cc       0x3c startup_stm32f103.o
+                0x00000000080002cc                Reset_Handler
+                0x0000000008000300                Default_Handler
+ .text          0x0000000008000308      0x100 system_stm32f1xx.o
+                0x0000000008000308                SystemInit
+                0x0000000008000380                SystemCoreClockUpdate
+ .text          0x0000000008000408      0x400 stm32f1xx_hal.o
+                0x0000000008000408                HAL_Init
+                0x0000000008000450                HAL_DeInit
+                0x0000000008000490                HAL_GetTick
+                0x00000000080004a0                HAL_IncTick
+                0x00000000080004c0                HAL_Delay
+ .text          0x0000000008000808      0x600 stm32f1xx_hal_gpio.o
+                0x0000000008000808                HAL_GPIO_Init
+                0x0000000008000a00                HAL_GPIO_WritePin
+                0x0000000008000a40                HAL_GPIO_TogglePin
+                0x0000000008000a80                HAL_GPIO_ReadPin
+ .text          0x0000000008000e08      0x500 stm32f1xx_hal_rcc.o
+                0x0000000008000e08                HAL_RCC_OscConfig
+                0x0000000008001000                HAL_RCC_ClockConfig
+                0x0000000008001200                HAL_RCC_GetSysClockFreq
+ .text          0x0000000008001308      0x400 stm32f1xx_hal_uart.o
+                0x0000000008001308                HAL_UART_Init
+                0x0000000008001400                HAL_UART_Transmit
+                0x0000000008001500                HAL_UART_Receive
+ .text          0x0000000008001708      0x0ac stm32f1xx_hal_cortex.o
+                0x0000000008001708                HAL_NVIC_SetPriority
+                0x0000000008001780                HAL_SYSTICK_Config
+ *(.text*)
+ *(.glue_7)
+ *(.glue_7t)
+                0x0000000008001b54                . = ALIGN (0x4)
+                0x0000000008001b54                _etext = .
+
+.rodata         0x0000000008001b54      0x120
+                0x0000000008001b54                . = ALIGN (0x4)
+ *(.rodata)
+ .rodata        0x0000000008001b54       0x80 main.o
+                0x0000000008001b54                version_string
+                0x0000000008001b80                config_table
+ *(.rodata*)
+ .rodata.str1.1
+                0x0000000008001bd4       0xa0 stm32f1xx_hal.o
+                0x0000000008001c74                . = ALIGN (0x4)
+
+.ARM.extab      0x0000000008001c74        0x0
+ *(.ARM.extab* .gnu.linkonce.armextab.*)
+
+.data           0x0000000020000000       0x1c
+                0x0000000020000000                . = ALIGN (0x4)
+                0x0000000020000000                _sdata = .
+ *(.data)
+ .data          0x0000000020000000       0x10 main.o
+                0x0000000020000000                uwTick
+                0x0000000020000004                SystemCoreClock
+                0x0000000020000008                led_state
+                0x000000002000000c                uart_handle
+ *(.data*)
+ .data          0x0000000020000010        0xc system_stm32f1xx.o
+                0x0000000020000010                AHBPrescTable
+                0x000000002000001c                . = ALIGN (0x4)
+                0x000000002000001c                _edata = .
+
+.bss            0x000000002000001c      0x200
+                0x000000002000001c                . = ALIGN (0x4)
+                0x000000002000001c                _sbss = .
+                0x000000002000001c                __bss_start__ = _sbss
+ *(.bss)
+ .bss           0x000000002000001c      0x100 main.o
+                0x000000002000001c                rx_buffer
+                0x000000002000011c                tx_buffer
+ *(.bss*)
+ .bss           0x000000002000011c       0x80 stm32f1xx_hal_uart.o
+                0x000000002000011c                uart_rx_state
+                0x0000000020000160                uart_tx_state
+ *(COMMON)
+                0x000000002000021c                . = ALIGN (0x4)
+                0x000000002000021c                _ebss = .
+                0x000000002000021c                __bss_end__ = _ebss
+
+._user_heap_stack
+                0x0000000020000220      0x600
+                0x0000000020000220                . = ALIGN (0x8)
+                0x0000000020000220                PROVIDE (end = .)
+                0x0000000020000220                PROVIDE (_end = .)
+                0x0000000020000420                . = (. + 0x200)
+                0x0000000020000820                . = (. + 0x400)
+                0x0000000020000820                . = ALIGN (0x8)
+
+Cross Reference Table
+
+Symbol                                            File
+main                                              main.o
+Reset_Handler                                     startup_stm32f103.o
+SystemInit                                        system_stm32f1xx.o
+HAL_Init                                          stm32f1xx_hal.o
+HAL_GPIO_Init                                     stm32f1xx_hal_gpio.o

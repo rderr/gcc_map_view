@@ -1,0 +1,123 @@
+Archive member included to satisfy reference by file (symbol)
+
+Allocating common symbols
+Common symbol       size              file
+
+Discarded input sections
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x0000000008000000 0x0000000000080000 xr
+RAM              0x0000000020000000 0x0000000000020000 xrw
+CCMRAM           0x0000000010000000 0x0000000000010000 rw
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+LOAD build/startup_stm32f407xx.o
+LOAD build/main.o
+LOAD build/system_stm32f4xx.o
+LOAD build/stm32f4xx_hal.o
+LOAD build/stm32f4xx_hal_gpio.o
+LOAD build/stm32f4xx_hal_uart.o
+
+.isr_vector     0x0000000008000000      0x188
+                0x0000000008000000                . = ALIGN (0x4)
+ *(.isr_vector)
+ .isr_vector    0x0000000008000000      0x188 build/startup_stm32f407xx.o
+                0x0000000008000000                g_pfnVectors
+                0x0000000008000188                . = ALIGN (0x4)
+
+.text           0x0000000008000188     0x2e64
+                0x0000000008000188                . = ALIGN (0x4)
+ *(.text)
+ .text          0x0000000008000188       0x3c build/startup_stm32f407xx.o
+                0x0000000008000188                Reset_Handler
+                0x00000000080001b8                Default_Handler
+ *(.text*)
+ .text.main     0x00000000080001c4      0x120 build/main.o
+                0x00000000080001c4                main
+ .text.SystemInit
+                0x00000000080002e4       0x48 build/system_stm32f4xx.o
+                0x00000000080002e4                SystemInit
+ .text.SystemCoreClockUpdate
+                0x000000000800032c       0x80 build/system_stm32f4xx.o
+                0x000000000800032c                SystemCoreClockUpdate
+ .text.HAL_Init
+                0x00000000080003ac       0x28 build/stm32f4xx_hal.o
+                0x00000000080003ac                HAL_Init
+ .text.HAL_GPIO_Init
+                0x00000000080003d4      0x2a0 build/stm32f4xx_hal_gpio.o
+                0x00000000080003d4                HAL_GPIO_Init
+ .text.HAL_GPIO_WritePin
+                0x0000000008000674       0x20 build/stm32f4xx_hal_gpio.o
+                0x0000000008000674                HAL_GPIO_WritePin
+ .text.HAL_GPIO_TogglePin
+                0x0000000008000694       0x1c build/stm32f4xx_hal_gpio.o
+                0x0000000008000694                HAL_GPIO_TogglePin
+ .text.HAL_UART_Init
+                0x00000000080006b0      0x120 build/stm32f4xx_hal_uart.o
+                0x00000000080006b0                HAL_UART_Init
+ .text.HAL_UART_Transmit
+                0x00000000080007d0      0x1a0 build/stm32f4xx_hal_uart.o
+                0x00000000080007d0                HAL_UART_Transmit
+ .text.HAL_UART_Receive
+                0x0000000008000970      0x180 build/stm32f4xx_hal_uart.o
+                0x0000000008000970                HAL_UART_Receive
+ *(.glue_7)
+ .glue_7        0x0000000008000af0        0x0 linker stubs
+ *(.glue_7t)
+ .glue_7t       0x0000000008000af0        0x0 linker stubs
+                0x0000000008000af0                . = ALIGN (0x4)
+
+.rodata         0x0000000008002fec      0x124
+                0x0000000008002fec                . = ALIGN (0x4)
+ *(.rodata)
+ *(.rodata*)
+ .rodata.str1.4
+                0x0000000008002fec       0x8c build/main.o
+ .rodata.AHBPrescTable
+                0x0000000008003078       0x10 build/system_stm32f4xx.o
+                0x0000000008003078                AHBPrescTable
+ .rodata.APBPrescTable
+                0x0000000008003088        0x8 build/system_stm32f4xx.o
+                0x0000000008003088                APBPrescTable
+                0x0000000008003110                . = ALIGN (0x4)
+
+.data           0x0000000020000000       0x1c
+                0x0000000020000000                . = ALIGN (0x4)
+                0x0000000020000000                _sdata = .
+ *(.data)
+ .data          0x0000000020000000        0x4 build/system_stm32f4xx.o
+                0x0000000020000000                SystemCoreClock
+ *(.data*)
+ .data.huart2   0x0000000020000004       0x14 build/main.o
+                0x0000000020000004                huart2
+                0x000000002000001c                . = ALIGN (0x4)
+                0x000000002000001c                _edata = .
+
+.bss            0x000000002000001c      0x120
+                0x000000002000001c                . = ALIGN (0x4)
+                0x000000002000001c                _sbss = .
+ *(.bss)
+ .bss           0x000000002000001c        0x4 build/main.o
+ *(.bss*)
+ .bss.rxBuffer  0x0000000020000020      0x100 build/main.o
+                0x0000000020000020                rxBuffer
+ *(COMMON)
+                0x000000002000013c                . = ALIGN (0x4)
+                0x000000002000013c                _ebss = .
+
+.ccmram         0x0000000010000000        0x0
+                0x0000000010000000                . = ALIGN (0x4)
+ *(.ccmram)
+ *(.ccmram*)
+                0x0000000010000000                . = ALIGN (0x4)
+
+Cross Reference Table
+
+Symbol                                            File
+Reset_Handler                                     build/startup_stm32f407xx.o
+main                                              build/main.o
+SystemInit                                        build/system_stm32f4xx.o
