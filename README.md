@@ -4,6 +4,8 @@ A Visual Studio Code extension that visualizes GCC map files (`.map`) with an in
 
 Works with any GCC-based toolchain — from embedded targets (STM32, ESP32) to x86/x64 Linux builds.
 
+![GCC Map View screenshot](resources/screenshot.png)
+
 ## Features
 
 ### Memory Layout Tree
