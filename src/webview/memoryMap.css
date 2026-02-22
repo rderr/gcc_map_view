@@ -105,13 +105,8 @@ h1 {
     text-shadow: none;
 }
 
-/* Section color classes */
-.section-text     { background: #2b7a78; }
-.section-rodata   { background: #17a2b8; }
-.section-data     { background: #e07020; }
-.section-bss      { background: #c0392b; }
-.section-vectors  { background: #7d3c98; }
-.section-default  { background: #555; }
+/* Default section background (overridden by inline style) */
+.section-block { background: #555; }
 
 /* Section block: switch to vertical flex to hold symbol grid */
 .section-block.has-symbols {

@@ -5,16 +5,13 @@
     const REGION_BAR_HEIGHT = 700;
     const SYM_COLOR_COUNT = 12;
 
-    let layoutData = null;
+    // Section colors — 12-hue palette (same as SYM_COLORS in extension.ts)
+    const SECTION_COLORS = [
+        '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
+        '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff',
+    ];
 
-    function getSectionColorClass(name) {
-        if (/^\.isr_vector/i.test(name) || /^\.vectors/i.test(name) || /^\.isr/i.test(name)) { return 'section-vectors'; }
-        if (/^\.rodata/i.test(name)) { return 'section-rodata'; }
-        if (/^\.text/i.test(name)) { return 'section-text'; }
-        if (/^\.bss/i.test(name)) { return 'section-bss'; }
-        if (/^\.data/i.test(name)) { return 'section-data'; }
-        return 'section-default';
-    }
+    let layoutData = null;
 
     function formatHex(value, width) {
         width = width || 8;
@@ -93,7 +90,8 @@
                 var symbols = (sec.symbols || []).filter(function (s) { return s.size > 0; });
 
                 var block = document.createElement('div');
-                block.className = 'section-block ' + getSectionColorClass(sec.name);
+                block.className = 'section-block';
+                block.style.background = SECTION_COLORS[i % SECTION_COLORS.length];
                 if (symbols.length > 0) {
                     block.className += ' has-symbols';
                     // Use min-height so the grid can grow taller
