@@ -8,8 +8,9 @@ const enum State {
 }
 
 export function isGccMapFile(text: string): boolean {
-    const lines = text.split('\n', 50);
-    return lines.some(l => /^Memory Configuration/i.test(l.trim()));
+    // Check for the header anywhere in the file — ESP-IDF maps can have
+    // tens of thousands of preamble lines before "Memory Configuration".
+    return /^Memory Configuration/im.test(text);
 }
 
 export function parseMap(text: string): MemoryLayout {
