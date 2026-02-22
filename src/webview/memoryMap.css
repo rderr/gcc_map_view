@@ -28,8 +28,8 @@ h1 {
 
 .region-column {
     flex: 1;
-    min-width: 200px;
-    max-width: 350px;
+    min-width: 250px;
+    max-width: 500px;
 }
 
 .region-header {
@@ -49,9 +49,9 @@ h1 {
     width: 100%;
     border: 1px solid var(--vscode-panel-border, #444);
     border-radius: 4px;
-    overflow: hidden;
     background: var(--vscode-editor-background);
     position: relative;
+    overflow: hidden;
 }
 
 .section-block {
@@ -62,9 +62,8 @@ h1 {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 20px;
+    min-height: 40px;
     border-bottom: 1px solid var(--vscode-panel-border, #333);
-    overflow: hidden;
 }
 
 .section-block:hover {
@@ -114,13 +113,14 @@ h1 {
 .section-vectors  { background: #7d3c98; }
 .section-default  { background: #555; }
 
-/* Section block: switch to vertical flex to hold symbol sub-blocks */
+/* Section block: switch to vertical flex to hold symbol grid */
 .section-block.has-symbols {
     display: flex;
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
     padding: 0;
+    height: auto !important;
 }
 
 .section-block.has-symbols > .section-label {
@@ -128,19 +128,24 @@ h1 {
     flex-shrink: 0;
 }
 
-/* Symbol sub-blocks inside sections */
-.symbol-row {
+/* Symbol grid inside sections */
+.symbol-grid {
     display: flex;
-    flex-direction: row;
+    flex-wrap: wrap;
     flex: 1;
+    align-content: flex-start;
     min-height: 0;
 }
 
 .symbol-block {
     cursor: pointer;
     transition: filter 0.15s, outline 0.15s;
-    min-width: 2px;
+    min-width: 6px;
+    height: 16px;
     position: relative;
+    flex-grow: 1;
+    border-right: 1px solid rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(0,0,0,0.2);
 }
 
 .symbol-block:hover {

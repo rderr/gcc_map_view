@@ -10,6 +10,34 @@ import { MemoryLayout, Section, Symbol } from './models/types';
 let treeProvider: MemoryTreeProvider;
 let treeView: vscode.TreeView<any>;
 
+// Section background colors — same palette as webview CSS
+const SECTION_COLORS: Record<string, string> = {
+    'section-vectors': '#7d3c98',
+    'section-rodata':  '#17a2b8',
+    'section-text':    '#2b7a78',
+    'section-bss':     '#c0392b',
+    'section-data':    '#e07020',
+    'section-default': '#555555',
+};
+
+// Symbol color palette — same 12 hues as webview CSS
+const SYM_COLORS = [
+    '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
+    '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff',
+];
+
+function getSectionColorKey(name: string): string {
+    if (/^\.isr_vector/i.test(name) || /^\.vectors/i.test(name) || /^\.isr/i.test(name)) { return 'section-vectors'; }
+    if (/^\.rodata/i.test(name)) { return 'section-rodata'; }
+    if (/^\.text/i.test(name)) { return 'section-text'; }
+    if (/^\.bss/i.test(name)) { return 'section-bss'; }
+    if (/^\.data/i.test(name)) { return 'section-data'; }
+    return 'section-default';
+}
+
+// Cache decoration types so we can dispose and recreate them
+let activeDecorations: vscode.TextEditorDecorationType[] = [];
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('GCC Map View: activating');
     treeProvider = new MemoryTreeProvider();
@@ -142,10 +170,62 @@ function parseDocument(document: vscode.TextDocument): void {
 
     treeProvider.setLayout(layout);
 
+    // Apply editor decorations for .map files
+    if (ext === '.map' && layout) {
+        const editor = vscode.window.visibleTextEditors.find(e => e.document === document);
+        if (editor) {
+            applyDecorations(editor, layout);
+        }
+    }
+
     // Update webview if open
     const panel = MemoryMapPanel.getCurrent();
     if (panel && layout) {
         panel.updateLayout(layout);
+    }
+}
+
+function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void {
+    // Dispose old decorations
+    for (const d of activeDecorations) {
+        d.dispose();
+    }
+    activeDecorations = [];
+
+    // Build a decoration type + ranges for each section
+    for (const region of layout.regions) {
+        for (const section of region.sections) {
+            if (section.sourceLine === undefined || section.sourceLineEnd === undefined) { continue; }
+
+            const colorKey = getSectionColorKey(section.name);
+            const baseColor = SECTION_COLORS[colorKey];
+
+            // Section header line gets a slightly stronger tint
+            const sectionDeco = vscode.window.createTextEditorDecorationType({
+                backgroundColor: baseColor + '30', // ~19% opacity
+                isWholeLine: true,
+                overviewRulerColor: baseColor,
+                overviewRulerLane: vscode.OverviewRulerLane.Left,
+            });
+            activeDecorations.push(sectionDeco);
+
+            const sectionRange = new vscode.Range(section.sourceLine, 0, section.sourceLineEnd, 0);
+            editor.setDecorations(sectionDeco, [sectionRange]);
+
+            // Decorate individual symbols with their palette color
+            for (let si = 0; si < section.symbols.length; si++) {
+                const sym = section.symbols[si];
+                if (sym.sourceLine === undefined) { continue; }
+
+                const symColor = SYM_COLORS[si % SYM_COLORS.length];
+                const symDeco = vscode.window.createTextEditorDecorationType({
+                    backgroundColor: symColor + '25', // ~15% opacity
+                    isWholeLine: true,
+                });
+                activeDecorations.push(symDeco);
+                editor.setDecorations(symDeco, [new vscode.Range(sym.sourceLine, 0, sym.sourceLine, 0)]);
+            }
+        }
     }
 }
 

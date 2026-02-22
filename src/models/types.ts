@@ -14,7 +14,8 @@ export interface Section {
     region?: string;
     symbols: Symbol[];
     loadAddress?: number;
-    sourceLine?: number; // 0-based line number in the source file
+    sourceLine?: number;    // 0-based line number in the source file
+    sourceLineEnd?: number;  // 0-based last line of this section
 }
 
 export interface Symbol {

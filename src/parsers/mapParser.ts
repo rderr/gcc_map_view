@@ -77,7 +77,10 @@ export function parseMap(text: string): MemoryLayout {
 
             case State.LINKER_MAP_SECTIONS: {
                 if (/^Cross Reference Table/i.test(trimmed)) {
-                    // Done parsing
+                    // Close last section's line range
+                    if (currentSection && currentSection.sourceLine !== undefined && currentSection.sourceLineEnd === undefined) {
+                        currentSection.sourceLineEnd = i - 1;
+                    }
                     state = State.SCANNING;
                     break;
                 }
@@ -89,6 +92,10 @@ export function parseMap(text: string): MemoryLayout {
                     /^(\.[a-zA-Z_][\w.]*)\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
                 );
                 if (outputSectionMatch) {
+                    // Close previous section's line range
+                    if (currentSection && currentSection.sourceLine !== undefined) {
+                        currentSection.sourceLineEnd = i - 1;
+                    }
                     currentSection = {
                         name: outputSectionMatch[1],
                         address: parseInt(outputSectionMatch[2], 16),
@@ -111,6 +118,10 @@ export function parseMap(text: string): MemoryLayout {
                             /^\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
                         );
                         if (addrSize) {
+                            // Close previous section's line range
+                            if (currentSection && currentSection.sourceLine !== undefined) {
+                                currentSection.sourceLineEnd = i - 1;
+                            }
                             currentSection = {
                                 name: sectionNameOnly[1],
                                 address: parseInt(addrSize[1], 16),
@@ -199,6 +210,11 @@ export function parseMap(text: string): MemoryLayout {
                 break;
             }
         }
+    }
+
+    // Close last section if still open
+    if (currentSection && currentSection.sourceLine !== undefined && currentSection.sourceLineEnd === undefined) {
+        currentSection.sourceLineEnd = lines.length - 1;
     }
 
     // Assign sections to regions by address range
