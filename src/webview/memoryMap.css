@@ -155,19 +155,19 @@ h1 {
     z-index: 3;
 }
 
-/* Symbol color palette — 12 distinct hues */
-.sym-color-0  { background: #e6194b; }
-.sym-color-1  { background: #3cb44b; }
-.sym-color-2  { background: #ffe119; }
-.sym-color-3  { background: #4363d8; }
-.sym-color-4  { background: #f58231; }
-.sym-color-5  { background: #911eb4; }
-.sym-color-6  { background: #42d4f4; }
-.sym-color-7  { background: #f032e6; }
-.sym-color-8  { background: #bfef45; }
-.sym-color-9  { background: #fabed4; }
-.sym-color-10 { background: #469990; }
-.sym-color-11 { background: #dcbeff; }
+/* Symbol color palette — 12-color colorblind-safe (Paul Tol) */
+.sym-color-0  { background: #4477AA; }
+.sym-color-1  { background: #66CCEE; }
+.sym-color-2  { background: #228833; }
+.sym-color-3  { background: #CCBB44; }
+.sym-color-4  { background: #EE6677; }
+.sym-color-5  { background: #AA3377; }
+.sym-color-6  { background: #BBBBBB; }
+.sym-color-7  { background: #EE8866; }
+.sym-color-8  { background: #44BB99; }
+.sym-color-9  { background: #99DDFF; }
+.sym-color-10 { background: #EEDD88; }
+.sym-color-11 { background: #FFAABB; }
 
 /* Tooltip */
 .tooltip {

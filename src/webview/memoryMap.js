@@ -5,10 +5,10 @@
     const REGION_BAR_HEIGHT = 700;
     const SYM_COLOR_COUNT = 12;
 
-    // Section colors — 12-hue palette (same as SYM_COLORS in extension.ts)
+    // 12-color colorblind-safe palette (Paul Tol qualitative scheme)
     const SECTION_COLORS = [
-        '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4',
-        '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff',
+        '#4477AA', '#66CCEE', '#228833', '#CCBB44', '#EE6677', '#AA3377',
+        '#BBBBBB', '#EE8866', '#44BB99', '#99DDFF', '#EEDD88', '#FFAABB',
     ];
 
     let layoutData = null;
