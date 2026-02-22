@@ -60,6 +60,11 @@
         "command": "gccMapView.openFile",
         "title": "Open Linker Script or Map File",
         "icon": "$(file)"
+      },
+      {
+        "command": "gccMapView.openSymbolSource",
+        "title": "Open Source File",
+        "icon": "$(go-to-file)"
       }
     ],
     "menus": {
@@ -77,6 +82,18 @@
         {
           "command": "gccMapView.openFile",
           "when": "view == memoryMapTree",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gccMapView.openSymbolSource",
+          "when": "view == memoryMapTree && viewItem == symbol",
+          "group": "inline"
+        },
+        {
+          "command": "gccMapView.openSymbolSource",
+          "when": "view == memoryMapTree && viewItem == symbol",
           "group": "navigation"
         }
       ]

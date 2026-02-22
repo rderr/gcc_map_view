@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Command: selectItem — handles clicks on section/symbol tree items
+    // Command: selectItem — handles single-clicks on section/symbol tree items
     context.subscriptions.push(
         vscode.commands.registerCommand('gccMapView.selectItem', (item: SectionTreeItem | SymbolTreeItem) => {
             const panel = MemoryMapPanel.getCurrent();
@@ -101,6 +101,14 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 goToLine(item.symbol.sourceLine);
             }
+        })
+    );
+
+    // Command: openSymbolSource — handles double-clicks on symbol tree items
+    context.subscriptions.push(
+        vscode.commands.registerCommand('gccMapView.openSymbolSource', async (item: SymbolTreeItem) => {
+            if (!(item instanceof SymbolTreeItem)) { return; }
+            await goToSymbolSource(item.symbol.name, item.symbol.sourceFile);
         })
     );
 
@@ -212,6 +220,93 @@ async function goToLine(sourceLine: number | undefined): Promise<void> {
     const range = new vscode.Range(sourceLine, 0, sourceLine, 0);
     editor.selection = new vscode.Selection(sourceLine, 0, sourceLine, 0);
     editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+}
+
+/**
+ * Extract a bare symbol name from a map-file symbol like ".text.myFunc" → "myFunc".
+ */
+function extractBareName(symName: string): string {
+    // Strip leading section prefixes: .text., .bss., .data., .rodata., .literal., etc.
+    const m = symName.match(/^\.[a-zA-Z_]+\.(.+)$/);
+    return m ? m[1] : symName;
+}
+
+/**
+ * Extract a source filename from the map-file object reference.
+ * Examples:
+ *   "esp-idf/LED_test/libtest.a(test_led.c.obj)" → "test_led.c"
+ *   "CMakeFiles/hub.elf.dir/main.c.obj"           → "main.c"
+ *   "C:/path/to/libpp.a(pp.o)"                    → "pp.c" (guess .c from .o)
+ */
+function extractSourceName(objRef: string): string | undefined {
+    if (!objRef) { return undefined; }
+
+    // Archive member: lib.a(file.c.obj) or lib.a(file.o)
+    const archiveMatch = objRef.match(/\(([^)]+)\)/);
+    if (archiveMatch) {
+        let name = archiveMatch[1];
+        name = name.replace(/\.obj$/, '').replace(/\.o$/, '');
+        // If it doesn't have an extension, guess .c
+        if (!/\.\w+$/.test(name)) { name += '.c'; }
+        return name;
+    }
+
+    // Direct object file: path/to/file.c.obj
+    const base = objRef.split(/[/\\]/).pop() || objRef;
+    let name = base.replace(/\.obj$/, '').replace(/\.o$/, '');
+    if (!/\.\w+$/.test(name)) { name += '.c'; }
+    return name;
+}
+
+async function goToSymbolSource(symName: string, sourceFile?: string): Promise<void> {
+    const sourceName = sourceFile ? extractSourceName(sourceFile) : undefined;
+    if (!sourceName) {
+        vscode.window.showInformationMessage('No source file information for this symbol.');
+        return;
+    }
+
+    // Search for the source file in the workspace
+    const pattern = `**/${sourceName}`;
+    const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 10);
+
+    if (uris.length === 0) {
+        vscode.window.showInformationMessage(`Could not find "${sourceName}" in the workspace.`);
+        return;
+    }
+
+    // If multiple matches, pick the first (could improve with a picker)
+    const targetUri = uris.length === 1 ? uris[0] : uris[0];
+
+    const doc = await vscode.workspace.openTextDocument(targetUri);
+    const editor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preserveFocus: false,
+    });
+
+    // Search for the bare symbol name in the file
+    const bareName = extractBareName(symName);
+    const text = doc.getText();
+    const lines = text.split('\n');
+
+    // Look for a definition-like line: function definition or variable declaration
+    let bestLine = -1;
+    const nameRegex = new RegExp('\\b' + escapeRegex(bareName) + '\\b');
+    for (let i = 0; i < lines.length; i++) {
+        if (nameRegex.test(lines[i])) {
+            bestLine = i;
+            break;
+        }
+    }
+
+    if (bestLine >= 0) {
+        const range = new vscode.Range(bestLine, 0, bestLine, 0);
+        editor.selection = new vscode.Selection(bestLine, 0, bestLine, 0);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    }
+}
+
+function escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function deactivate() {}
