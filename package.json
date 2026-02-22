@@ -3,7 +3,31 @@
   "displayName": "GCC Map View",
   "description": "Visualize GCC linker scripts (.ld) and map files (.map) with a tree view and graphical memory map",
   "version": "0.1.0",
-  "publisher": "gcc-map-view",
+  "license": "MIT",
+  "author": "Rob Derr <robjderr@gmail.com>",
+  "publisher": "RobDerr",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rderr/gcc_map_view"
+  },
+  "homepage": "https://github.com/rderr/gcc_map_view#readme",
+  "bugs": {
+    "url": "https://github.com/rderr/gcc_map_view/issues"
+  },
+  "keywords": [
+    "gcc",
+    "map",
+    "memory",
+    "linker",
+    "embedded",
+    "stm32",
+    "esp32"
+  ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -23,8 +47,14 @@
     "languages": [
       {
         "id": "linkerscript",
-        "aliases": ["Linker Script", "ld"],
-        "extensions": [".ld", ".lds"],
+        "aliases": [
+          "Linker Script",
+          "ld"
+        ],
+        "extensions": [
+          ".ld",
+          ".lds"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -122,11 +152,14 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.7.1",
     "typescript": "^5.3.0"
   }
 }

@@ -1,8 +1,8 @@
 # GCC Map View
 
-A Visual Studio Code extension that visualizes GCC linker scripts (`.ld`, `.lds`) and map files (`.map`) with an interactive tree view and graphical memory map.
+A Visual Studio Code extension that visualizes GCC map files (`.map`) with an interactive tree view and graphical memory map.
 
-Built for embedded developers working with GCC-based toolchains (STM32, ESP32, and other microcontroller platforms).
+Works with any GCC-based toolchain — from embedded targets (STM32, ESP32) to x86/x64 Linux builds.
 
 ## Features
 
@@ -34,7 +34,6 @@ Click a section in the webview to reveal it in the tree and editor. Click a tree
 
 | Extension | Description |
 |-----------|-------------|
-| `.ld`, `.lds` | GCC linker scripts (parsed for MEMORY and SECTIONS blocks) |
 | `.map` | GCC linker map files (auto-detected; JS source maps are ignored) |
 
 ## Commands
@@ -43,7 +42,7 @@ Click a section in the webview to reveal it in the tree and editor. Click a tree
 |---------|-------------|------|
 | **Show Memory Map** | Open the graphical memory map webview | `$(graph)` |
 | **Refresh Memory Map** | Re-parse the active file | `$(refresh)` |
-| **Open Linker Script or Map File** | Browse and open a `.ld`, `.lds`, or `.map` file | `$(file)` |
+| **Open Map File** | Browse and open a `.map` file | `$(file)` |
 | **Search Symbols** | Filter the tree by symbol name | `$(search)` |
 | **Clear Search** | Remove the active filter | `$(clear-all)` |
 | **Open Source File** | Navigate to a symbol's source file (context menu) | `$(go-to-file)` |
@@ -51,7 +50,7 @@ Click a section in the webview to reveal it in the tree and editor. Click a tree
 ## Getting Started
 
 1. Install the extension
-2. Open a `.ld`, `.lds`, or `.map` file
+2. Open a `.map` file
 3. The **GCC Memory Map** sidebar appears automatically with the parsed layout
 4. Click the graph icon in the tree title bar to open the graphical memory map
 
