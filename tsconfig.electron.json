@@ -2,15 +2,21 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2022",
-    "outDir": "out",
-    "rootDir": "src",
+    "outDir": "out-electron",
     "lib": ["ES2022"],
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "rootDir": "."
   },
-  "exclude": ["node_modules", ".vscode-test", "out", "electron"]
+  "include": [
+    "src/models/**/*",
+    "src/parsers/**/*",
+    "src/util/**/*",
+    "electron/**/*"
+  ],
+  "exclude": ["node_modules"]
 }

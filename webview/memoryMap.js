@@ -1,6 +1,4 @@
 (function () {
-    // @ts-ignore
-    const vscode = acquireVsCodeApi();
     const MIN_SECTION_HEIGHT = 40;
     const REGION_BAR_HEIGHT = 700;
     const SYM_COLOR_COUNT = 12;
@@ -138,7 +136,7 @@
                         symBlock.addEventListener('click', (function (symbolName, sectionName) {
                             return function (e) {
                                 e.stopPropagation();
-                                vscode.postMessage({ type: 'selectSymbol', symbol: symbolName, section: sectionName });
+                                window.mapViewIPC.postMessage({ type: 'selectSymbol', symbol: symbolName, section: sectionName });
                             };
                         })(sym.name, sec.name));
 
@@ -158,7 +156,7 @@
                 // Section-level click (only fires if not caught by a symbol)
                 block.addEventListener('click', (function (sectionName) {
                     return function () {
-                        vscode.postMessage({ type: 'selectSection', section: sectionName });
+                        window.mapViewIPC.postMessage({ type: 'selectSection', section: sectionName });
                     };
                 })(sec.name));
 
@@ -229,8 +227,19 @@
     function moveTooltip(e) {
         var tooltip = document.getElementById('tooltip');
         if (!tooltip) { return; }
-        tooltip.style.left = (e.clientX + 12) + 'px';
-        tooltip.style.top = (e.clientY + 12) + 'px';
+        var gap = 12;
+        var x = e.clientX + gap;
+        var y = e.clientY + gap;
+        var tw = tooltip.offsetWidth;
+        var th = tooltip.offsetHeight;
+        var vw = document.documentElement.clientWidth;
+        var vh = document.documentElement.clientHeight;
+        if (x + tw > vw) { x = e.clientX - tw - gap; }
+        if (y + th > vh) { y = e.clientY - th - gap; }
+        if (x < 0) { x = 0; }
+        if (y < 0) { y = 0; }
+        tooltip.style.left = x + 'px';
+        tooltip.style.top = y + 'px';
     }
 
     function hideTooltip() {
@@ -278,9 +287,8 @@
         return div.innerHTML;
     }
 
-    // Message handling from extension
-    window.addEventListener('message', function (event) {
-        var msg = event.data;
+    // Message handling from extension / main process
+    window.mapViewIPC.onMessage(function (msg) {
         switch (msg.type) {
             case 'updateLayout':
                 layoutData = msg.layout;

@@ -1,4 +1,6 @@
 out/
+out-electron/
+dist/
 node_modules/
 *.vsix
 .vscode-test/

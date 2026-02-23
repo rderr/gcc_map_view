@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';">
+    <title>GCC Map View</title>
+    <style>
+        /* CSS variables — standalone theme (dark) */
+        :root {
+            --bg: #1e1e1e;
+            --bg-sidebar: #252526;
+            --bg-input: #3c3c3c;
+            --bg-hover: rgba(255, 255, 255, 0.06);
+            --fg: #cccccc;
+            --fg-dim: #888888;
+            --border-color: #3c3c3c;
+            --accent: #4fc1ff;
+            --focus-border: #007acc;
+
+            /* Map vscode CSS vars used by memoryMap.css */
+            --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --vscode-font-size: 13px;
+            --vscode-foreground: var(--fg);
+            --vscode-editor-background: var(--bg);
+            --vscode-descriptionForeground: var(--fg-dim);
+            --vscode-panel-border: var(--border-color);
+            --vscode-focusBorder: var(--focus-border);
+            --vscode-progressBar-background: #333;
+            --vscode-editorHoverWidget-background: #252526;
+            --vscode-editorHoverWidget-border: #454545;
+            --vscode-editorHoverWidget-foreground: #ccc;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            color: var(--fg);
+            background: var(--bg);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #map-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        /* Drag-and-drop overlay */
+        #drop-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 122, 204, 0.15);
+            border: 3px dashed var(--accent);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            color: var(--accent);
+            pointer-events: none;
+        }
+
+        #drop-overlay.visible {
+            display: flex;
+        }
+    </style>
+    <link rel="stylesheet" href="tree.css">
+    <link rel="stylesheet" href="memoryMap.css">
+</head>
+<body>
+    <!-- Tree sidebar -->
+    <div id="tree-panel">
+        <div id="tree-search-container">
+            <input type="text" id="tree-search" placeholder="Search symbols...">
+        </div>
+        <div id="tree"></div>
+    </div>
+
+    <!-- Memory map -->
+    <div id="map-panel">
+        <div id="app">
+            <div class="no-data">Drop a .map or .ld file here, or use File &gt; Open.</div>
+        </div>
+        <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <!-- Drag-and-drop overlay -->
+    <div id="drop-overlay">Drop file to open</div>
+
+    <!-- IPC adapter (must load before other scripts) -->
+    <script src="ipc-electron.js"></script>
+
+    <!-- Cross-component highlight bridges -->
+    <script>
+        // Bridge: tree click → memory map highlight
+        window.highlightSectionFromTree = function (sectionName) {
+            // Re-use the memory map highlight functions (defined in memoryMap.js IIFE)
+            // They operate on the DOM directly, so we call them via a message round-trip
+            window.mapViewIPC.onMessage._highlightSection && window.mapViewIPC.onMessage._highlightSection(sectionName);
+            // Simpler: just dispatch to the existing message handler
+            var blocks = document.querySelectorAll('.section-block');
+            blocks.forEach(function (el) { el.classList.remove('highlighted'); });
+            var selector = '.section-block[data-section="' + CSS.escape(sectionName) + '"]';
+            document.querySelectorAll(selector).forEach(function (el) {
+                el.classList.add('highlighted');
+                el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        };
+
+        window.highlightSymbolFromTree = function (symbolName, sectionName) {
+            document.querySelectorAll('.highlighted').forEach(function (el) { el.classList.remove('highlighted'); });
+            var blocks = document.querySelectorAll('.symbol-block');
+            for (var i = 0; i < blocks.length; i++) {
+                var b = blocks[i];
+                if (b.getAttribute('data-symbol') === symbolName &&
+                    (!sectionName || b.getAttribute('data-section') === sectionName)) {
+                    b.classList.add('highlighted');
+                    b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    break;
+                }
+            }
+        };
+    </script>
+
+    <!-- Tree and memory map scripts -->
+    <script src="tree.js"></script>
+    <script src="memoryMap.js"></script>
+
+    <!-- Drag-and-drop handler -->
+    <script>
+        (function () {
+            var overlay = document.getElementById('drop-overlay');
+            var dragCounter = 0;
+
+            document.addEventListener('dragenter', function (e) {
+                e.preventDefault();
+                dragCounter++;
+                if (overlay) { overlay.classList.add('visible'); }
+            });
+
+            document.addEventListener('dragleave', function (e) {
+                e.preventDefault();
+                dragCounter--;
+                if (dragCounter <= 0) {
+                    dragCounter = 0;
+                    if (overlay) { overlay.classList.remove('visible'); }
+                }
+            });
+
+            document.addEventListener('dragover', function (e) {
+                e.preventDefault();
+            });
+
+            document.addEventListener('drop', function (e) {
+                e.preventDefault();
+                dragCounter = 0;
+                if (overlay) { overlay.classList.remove('visible'); }
+
+                var files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length > 0) {
+                    var filePath = files[0].path;
+                    if (filePath) {
+                        window.electronAPI.send('drop-file', filePath);
+                    }
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

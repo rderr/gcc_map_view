@@ -9,3 +9,7 @@ tsconfig.json
 **/*.ts
 !out/**
 out/**/*.map
+electron/**
+out-electron/**
+dist/**
+tsconfig.electron.json

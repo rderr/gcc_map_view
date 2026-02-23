@@ -154,12 +154,43 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "compile:electron": "tsc -p tsconfig.electron.json",
+    "watch:electron": "tsc -watch -p tsconfig.electron.json",
+    "start:electron": "npm run compile:electron && electron out-electron/electron/main.js",
+    "dist:electron": "npm run compile:electron && electron-builder"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "typescript": "^5.3.0"
+  },
+  "build": {
+    "appId": "com.robderr.gcc-map-view",
+    "productName": "GCC Map View",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out-electron/**/*",
+      "webview/**/*",
+      "!webview/ipc-vscode.js",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "out-electron/electron/main.js"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

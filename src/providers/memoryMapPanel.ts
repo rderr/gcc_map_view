@@ -98,15 +98,18 @@ export class MemoryMapPanel {
         // Resolve resource URIs
         const cssPath = path.join(this.extensionPath, 'webview', 'memoryMap.css');
         const jsPath = path.join(this.extensionPath, 'webview', 'memoryMap.js');
+        const ipcAdapterPath = path.join(this.extensionPath, 'webview', 'ipc-vscode.js');
         const htmlPath = path.join(this.extensionPath, 'webview', 'memoryMap.html');
 
         const cssUri = webview.asWebviewUri(vscode.Uri.file(cssPath));
         const scriptUri = webview.asWebviewUri(vscode.Uri.file(jsPath));
+        const ipcAdapterUri = webview.asWebviewUri(vscode.Uri.file(ipcAdapterPath));
 
         let html = fs.readFileSync(htmlPath, 'utf8');
         html = html.replace(/\{\{cspSource\}\}/g, webview.cspSource);
         html = html.replace(/\{\{nonce\}\}/g, nonce);
         html = html.replace(/\{\{cssUri\}\}/g, cssUri.toString());
+        html = html.replace(/\{\{ipcAdapterUri\}\}/g, ipcAdapterUri.toString());
         html = html.replace(/\{\{scriptUri\}\}/g, scriptUri.toString());
 
         return html;
