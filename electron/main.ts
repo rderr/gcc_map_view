@@ -6,6 +6,8 @@ import { parseMap, isGccMapFile } from '../src/parsers/mapParser';
 import { MemoryLayout } from '../src/models/types';
 
 let mainWindow: BrowserWindow | null = null;
+let sourceLines: string[] = [];
+let sourceFileName = '';
 
 function createWindow(): void {
     mainWindow = new BrowserWindow({
@@ -88,7 +90,13 @@ function loadFile(filePath: string): void {
 
     layout.sourceFile = filePath;
     mainWindow.setTitle(`GCC Map View — ${path.basename(filePath)}`);
-    mainWindow.webContents.send('main-message', { type: 'updateLayout', layout, sourceText: text, fileName: path.basename(filePath) });
+    // Store lines for on-demand fetching by the renderer
+    sourceLines = text.split('\n');
+    sourceFileName = path.basename(filePath);
+    mainWindow.webContents.send('main-message', {
+        type: 'updateLayout', layout,
+        sourceInfo: { fileName: sourceFileName, totalLines: sourceLines.length },
+    });
 }
 
 // IPC: renderer → main
@@ -97,6 +105,16 @@ ipcMain.on('renderer-message', (_event: IpcMainEvent, msg: { type: string }) => 
     if (msg.type === 'selectSection' || msg.type === 'selectSymbol') {
         // In standalone app, highlight is handled in renderer; nothing to do here
     }
+});
+
+// IPC: renderer requests a range of source lines
+ipcMain.handle('get-source-lines', (_event, first: number, last: number) => {
+    if (!sourceLines.length) { return null; }
+    const clamped = sourceLines.slice(
+        Math.max(0, first),
+        Math.min(sourceLines.length, last + 1),
+    );
+    return clamped;
 });
 
 // Handle file opened via drag-and-drop or command line

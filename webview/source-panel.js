@@ -1,53 +1,115 @@
-// Source text panel — shows raw file content with line numbers
+// Source text panel — virtual-scrolling, fetches visible lines on demand from main process
 (function () {
     var sourcePanel = document.getElementById('source-panel');
     var sourceContent = document.getElementById('source-content');
     var sourceFilename = document.getElementById('source-filename');
+    var contentWrapper = document.getElementById('source-content-wrapper');
     var resizeHandle = document.getElementById('source-resize-handle');
+    var highlightEl = document.getElementById('source-highlight');
 
-    // Populate source panel when layout is received
-    window.mapViewIPC.onMessage(function (msg) {
-        if (msg.type === 'updateLayout' && msg.sourceText) {
-            var lines = msg.sourceText.split('\n');
-            sourceContent.innerHTML = '';
-            for (var i = 0; i < lines.length; i++) {
-                var lineEl = document.createElement('div');
-                lineEl.className = 'source-line';
-                lineEl.setAttribute('data-line', i);
+    var LINE_HEIGHT = 16.8; // 12px font * 1.4 line-height
+    var OVERSCAN = 30;
+    var totalLines = 0;
+    var gutterWidth = 0;
+    var highlightedLine = -1;
+    var lastFirst = -1;
+    var lastLast = -1;
+    var fetchPending = false;
 
-                var numSpan = document.createElement('span');
-                numSpan.className = 'line-number';
-                numSpan.textContent = (i + 1).toString();
+    function getVisibleRange() {
+        if (!contentWrapper || totalLines === 0) { return null; }
+        var scrollTop = contentWrapper.scrollTop;
+        var viewHeight = contentWrapper.clientHeight;
+        var first = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - OVERSCAN);
+        var last = Math.min(totalLines - 1, Math.ceil((scrollTop + viewHeight) / LINE_HEIGHT) + OVERSCAN);
+        return { first: first, last: last };
+    }
 
-                var textSpan = document.createElement('span');
-                textSpan.className = 'line-text';
-                textSpan.textContent = lines[i];
+    function renderLines(lines, first) {
+        var parts = new Array(lines.length);
+        for (var i = 0; i < lines.length; i++) {
+            var num = (first + i + 1).toString();
+            while (num.length < gutterWidth) { num = ' ' + num; }
+            parts[i] = num + '  ' + lines[i];
+        }
 
-                lineEl.appendChild(numSpan);
-                lineEl.appendChild(textSpan);
-                sourceContent.appendChild(lineEl);
+        sourceContent.style.paddingTop = (first * LINE_HEIGHT) + 'px';
+        sourceContent.style.paddingBottom = (Math.max(0, totalLines - first - lines.length) * LINE_HEIGHT) + 'px';
+        sourceContent.textContent = parts.join('\n');
+
+        if (highlightEl && highlightedLine >= 0) {
+            highlightEl.style.top = (highlightedLine * LINE_HEIGHT) + 'px';
+            highlightEl.style.height = LINE_HEIGHT + 'px';
+            highlightEl.style.display = 'block';
+        }
+    }
+
+    function fetchVisible() {
+        var range = getVisibleRange();
+        if (!range || fetchPending) { return; }
+        // Skip if range hasn't changed much
+        if (range.first >= lastFirst && range.last <= lastLast) { return; }
+
+        lastFirst = range.first;
+        lastLast = range.last;
+        fetchPending = true;
+
+        window.electronAPI.invoke('get-source-lines', range.first, range.last).then(function (lines) {
+            fetchPending = false;
+            if (lines) {
+                renderLines(lines, range.first);
             }
+        });
+    }
 
-            if (msg.fileName) {
-                sourceFilename.textContent = msg.fileName;
+    // Listen for layout updates that include source info
+    window.mapViewIPC.onMessage(function (msg) {
+        if (msg.type === 'updateLayout' && msg.sourceInfo) {
+            totalLines = msg.sourceInfo.totalLines;
+            gutterWidth = totalLines.toString().length;
+            highlightedLine = -1;
+            lastFirst = -1;
+            lastLast = -1;
+
+            if (highlightEl) { highlightEl.style.display = 'none'; }
+            sourceContent.textContent = '';
+
+            if (msg.sourceInfo.fileName) {
+                sourceFilename.textContent = msg.sourceInfo.fileName;
             }
             sourcePanel.classList.add('visible');
+
+            requestAnimationFrame(fetchVisible);
         }
+    });
+
+    if (contentWrapper) {
+        var scrollTimer;
+        contentWrapper.addEventListener('scroll', function () {
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(fetchVisible, 16);
+        });
+    }
+
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+            lastFirst = -1;
+            lastLast = -1;
+            fetchVisible();
+        }, 50);
     });
 
     // Scroll to a specific 0-based line number and highlight it
     window.scrollSourceToLine = function (line) {
-        if (line === undefined || line === null) { return; }
-        // Clear previous highlights
-        var prev = sourceContent.querySelectorAll('.source-line.highlighted');
-        for (var i = 0; i < prev.length; i++) {
-            prev[i].classList.remove('highlighted');
-        }
-        var lineEl = sourceContent.querySelector('.source-line[data-line="' + line + '"]');
-        if (lineEl) {
-            lineEl.classList.add('highlighted');
-            lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        if (line === undefined || line === null || !contentWrapper || totalLines === 0) { return; }
+        highlightedLine = line;
+        var scrollTop = Math.max(0, (line * LINE_HEIGHT) - (contentWrapper.clientHeight / 2));
+        contentWrapper.scrollTop = scrollTop;
+        lastFirst = -1;
+        lastLast = -1;
+        fetchVisible();
     };
 
     // Resize handle drag
@@ -64,6 +126,9 @@
             var delta = startY - e.clientY;
             var newHeight = Math.max(80, Math.min(window.innerHeight - 200, startHeight + delta));
             sourcePanel.style.height = newHeight + 'px';
+            lastFirst = -1;
+            lastLast = -1;
+            fetchVisible();
         }
         function onMouseUp() {
             document.removeEventListener('mousemove', onMouseMove);

@@ -3,7 +3,7 @@
     width: 320px;
     min-width: 200px;
     max-width: 50vw;
-    height: 100vh;
+    height: 100%;
     overflow-y: auto;
     border-right: 1px solid var(--border-color);
     background: var(--bg-sidebar);

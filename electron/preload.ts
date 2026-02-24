@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
             callback(data);
         });
     },
+    invoke: (channel: string, ...args: unknown[]) => {
+        return ipcRenderer.invoke(channel, ...args);
+    },
 });

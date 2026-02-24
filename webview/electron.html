@@ -84,11 +84,12 @@
             flex: 1;
             overflow: auto;
             background: var(--bg);
+            position: relative;
         }
 
         #source-content {
             margin: 0;
-            padding: 4px 0;
+            padding: 4px 12px;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.4;
@@ -96,32 +97,13 @@
             tab-size: 4;
         }
 
-        #source-content .source-line {
-            display: flex;
-            white-space: pre;
-            padding: 0 12px 0 0;
-        }
-
-        #source-content .source-line:hover {
-            background: var(--bg-hover);
-        }
-
-        #source-content .source-line.highlighted {
+        #source-highlight {
+            display: none;
+            position: absolute;
+            left: 0;
+            right: 0;
             background: rgba(0, 122, 204, 0.25);
-        }
-
-        #source-content .line-number {
-            display: inline-block;
-            width: 5em;
-            text-align: right;
-            padding-right: 1em;
-            color: var(--fg-dim);
-            user-select: none;
-            flex-shrink: 0;
-        }
-
-        #source-content .line-text {
-            flex: 1;
+            pointer-events: none;
         }
 
         #source-resize-handle {
@@ -190,6 +172,7 @@
             <span class="source-title" id="source-filename">Source</span>
         </div>
         <div id="source-content-wrapper">
+            <div id="source-highlight"></div>
             <pre id="source-content"></pre>
         </div>
     </div>
