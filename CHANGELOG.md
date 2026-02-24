@@ -2,6 +2,15 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
+## [0.2.1] - 2026-02-24
+
+### Fixed
+- Major performance improvement: cache parsed layout to skip redundant re-parsing on every editor focus
+- Batch editor decorations by color (24 types max instead of one per symbol)
+- Use event delegation in webview instead of thousands of per-element listeners
+- Fix symbol navigation for ESP-IDF maps with duplicate names (e.g. .iram1.0.literal) by using address-based lookup
+- Fix broken tooltip in memory map caused by data map key mismatch and incorrect mouse event handling
+
 ## [0.2.0] - 2026-02-24
 
 ### Added
