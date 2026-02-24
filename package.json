@@ -164,7 +164,7 @@
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
-    "electron": "^33.4.11",
+    "electron": "^35.7.5",
     "electron-builder": "^25.1.8",
     "typescript": "^5.3.0"
   },
