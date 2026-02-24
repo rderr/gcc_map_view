@@ -204,17 +204,20 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
     }
     activeDecorations = [];
 
-    // Assign each section a color from the 12-hue palette (cycling), matching the webview
+    // Assign each section a color from the 12-hue palette (cycling), matching the webview map.
+    // Uses a global running index across all regions so every section gets a distinct color.
     let sectionIndex = 0;
     for (const region of layout.regions) {
-        for (const section of region.sections) {
-            if (section.sourceLine === undefined || section.sourceLineEnd === undefined) { continue; }
-
+        if (region.length === 0) { continue; }
+        const sections = region.sections.slice().sort((a, b) => a.address - b.address);
+        for (let i = 0; i < sections.length; i++) {
+            const section = sections[i];
             const baseColor = PALETTE[sectionIndex % PALETTE.length];
             sectionIndex++;
+            if (section.sourceLine === undefined || section.sourceLineEnd === undefined) { continue; }
 
             const sectionDeco = vscode.window.createTextEditorDecorationType({
-                backgroundColor: baseColor + '30', // ~19% opacity
+                backgroundColor: baseColor + '55', // ~33% opacity
                 isWholeLine: true,
                 overviewRulerColor: baseColor,
                 overviewRulerLane: vscode.OverviewRulerLane.Left,

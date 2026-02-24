@@ -47,6 +47,7 @@
         container.className = 'memory-container';
         app.appendChild(container);
 
+        var globalSectionIndex = 0;
         for (var r = 0; r < layout.regions.length; r++) {
             var region = layout.regions[r];
             if (region.length === 0) { continue; }
@@ -94,7 +95,9 @@
 
                 var block = document.createElement('div');
                 block.className = 'section-block';
-                block.style.background = SECTION_COLORS[i % SECTION_COLORS.length];
+                var sectionColor = SECTION_COLORS[globalSectionIndex % SECTION_COLORS.length];
+                globalSectionIndex++;
+                block.style.background = sectionColor;
                 if (symbols.length > 0) {
                     block.className += ' has-symbols';
                     // Use min-height so the grid can grow taller

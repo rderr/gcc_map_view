@@ -97,12 +97,18 @@
             tab-size: 4;
         }
 
+        #source-color-bands {
+            height: 0;
+            pointer-events: none;
+        }
+
         #source-highlight {
             display: none;
             position: absolute;
             left: 0;
             right: 0;
-            background: rgba(0, 122, 204, 0.25);
+            background: transparent;
+            border-left: 3px solid var(--focus-border);
             pointer-events: none;
         }
 
@@ -172,6 +178,7 @@
             <span class="source-title" id="source-filename">Source</span>
         </div>
         <div id="source-content-wrapper">
+            <div id="source-color-bands"></div>
             <div id="source-highlight"></div>
             <pre id="source-content"></pre>
         </div>
