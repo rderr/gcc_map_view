@@ -46,9 +46,9 @@ window.highlightSymbolFromTree = function (symbolName, sectionName, sourceLine) 
 
         // Handle map cell clicks
         if (msg.type === 'selectSection') {
-            selectSectionInTree(msg.section);
+            selectSectionInTree(msg.section, msg.sourceLine);
         } else if (msg.type === 'selectSymbol') {
-            selectSymbolInTree(msg.symbol, msg.section);
+            selectSymbolInTree(msg.symbol, msg.section, msg.sourceLine);
         }
     });
 
@@ -79,19 +79,27 @@ window.highlightSymbolFromTree = function (symbolName, sectionName, sourceLine) 
         return null;
     }
 
-    function selectSectionInTree(sectionName) {
+    function selectSectionInTree(sectionName, directSourceLine) {
         highlightTreeNode(sectionName, null);
-        var sec = findSection(sectionName);
-        if (sec && sec.sourceLine !== undefined && typeof window.scrollSourceToLine === 'function') {
-            window.scrollSourceToLine(sec.sourceLine);
+        var line = directSourceLine;
+        if (line === undefined) {
+            var sec = findSection(sectionName);
+            if (sec) { line = sec.sourceLine; }
+        }
+        if (line !== undefined && typeof window.scrollSourceToLine === 'function') {
+            window.scrollSourceToLine(line);
         }
     }
 
-    function selectSymbolInTree(symbolName, sectionName) {
+    function selectSymbolInTree(symbolName, sectionName, directSourceLine) {
         highlightTreeNode(symbolName, sectionName);
-        var sym = findSymbol(symbolName, sectionName);
-        if (sym && sym.sourceLine !== undefined && typeof window.scrollSourceToLine === 'function') {
-            window.scrollSourceToLine(sym.sourceLine);
+        var line = directSourceLine;
+        if (line === undefined) {
+            var sym = findSymbol(symbolName, sectionName);
+            if (sym) { line = sym.sourceLine; }
+        }
+        if (line !== undefined && typeof window.scrollSourceToLine === 'function') {
+            window.scrollSourceToLine(line);
         }
     }
 

@@ -143,12 +143,12 @@
                         symBlock.setAttribute('data-section', sec.name);
 
                         // Click: select symbol
-                        symBlock.addEventListener('click', (function (symbolName, sectionName) {
+                        symBlock.addEventListener('click', (function (symbolName, sectionName, symSourceLine) {
                             return function (e) {
                                 e.stopPropagation();
-                                window.mapViewIPC.postMessage({ type: 'selectSymbol', symbol: symbolName, section: sectionName });
+                                window.mapViewIPC.postMessage({ type: 'selectSymbol', symbol: symbolName, section: sectionName, sourceLine: symSourceLine });
                             };
-                        })(sym.name, sec.name));
+                        })(sym.name, sec.name, sym.sourceLine));
 
                         // Tooltip on hover
                         symBlock.addEventListener('mouseenter', (function (symbol) {
@@ -164,11 +164,11 @@
                 }
 
                 // Section-level click (only fires if not caught by a symbol)
-                block.addEventListener('click', (function (sectionName) {
+                block.addEventListener('click', (function (sectionName, secSourceLine) {
                     return function () {
-                        window.mapViewIPC.postMessage({ type: 'selectSection', section: sectionName });
+                        window.mapViewIPC.postMessage({ type: 'selectSection', section: sectionName, sourceLine: secSourceLine });
                     };
-                })(sec.name));
+                })(sec.name, sec.sourceLine));
 
                 block.addEventListener('mouseenter', (function (section) {
                     return function (e) { showTooltip(e, section); };
