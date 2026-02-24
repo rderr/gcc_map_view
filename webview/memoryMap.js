@@ -11,6 +11,13 @@
 
     let layoutData = null;
 
+    // Index for O(1) highlight lookups: "section\0symbol" -> element
+    var symbolIndex = {};
+    // Index for section blocks: "sectionName" -> [elements]
+    var sectionIndex = {};
+    // Currently highlighted element
+    var currentHighlight = null;
+
     function formatHex(value, width) {
         width = width || 8;
         return '0x' + value.toString(16).toUpperCase().padStart(width, '0');
@@ -27,25 +34,36 @@
         return (used / total) * 100;
     }
 
+    // Lookup table from symbol data-key to symbol data object (for tooltip on hover)
+    var symbolDataMap = {};
+    // Lookup table from section data-section to section data object (for tooltip on hover)
+    var sectionDataMap = {};
+
     function render(layout) {
         var app = document.getElementById('app');
         if (!app) { return; }
+
+        // Reset indexes
+        symbolIndex = {};
+        sectionIndex = {};
+        symbolDataMap = {};
+        sectionDataMap = {};
+        currentHighlight = null;
 
         if (!layout || !layout.regions || layout.regions.length === 0) {
             app.innerHTML = '<div class="no-data">No memory layout data available.<br>Open a .ld or .map file to visualize memory.</div>';
             return;
         }
 
-        // Clear and rebuild
-        app.innerHTML = '';
+        // Build DOM in a document fragment to avoid repeated reflows
+        var fragment = document.createDocumentFragment();
 
         var heading = document.createElement('h1');
         heading.textContent = 'Memory Map';
-        app.appendChild(heading);
+        fragment.appendChild(heading);
 
         var container = document.createElement('div');
         container.className = 'memory-container';
-        app.appendChild(container);
 
         var globalSectionIndex = 0;
         for (var r = 0; r < layout.regions.length; r++) {
@@ -100,12 +118,17 @@
                 block.style.background = sectionColor;
                 if (symbols.length > 0) {
                     block.className += ' has-symbols';
-                    // Use min-height so the grid can grow taller
                     block.style.minHeight = heightPx + 'px';
                 } else {
                     block.style.height = heightPx + 'px';
                 }
                 block.setAttribute('data-section', sec.name);
+                block.setAttribute('data-source-line', sec.sourceLine !== undefined ? String(sec.sourceLine) : '');
+
+                // Store section data for tooltip delegation
+                sectionDataMap[sec.name] = sec;
+                if (!sectionIndex[sec.name]) { sectionIndex[sec.name] = []; }
+                sectionIndex[sec.name].push(block);
 
                 var label = document.createElement('span');
                 label.className = 'section-label';
@@ -119,43 +142,33 @@
                     var symGrid = document.createElement('div');
                     symGrid.className = 'symbol-grid';
 
-                    // Each symbol gets a flex-basis proportional to its size.
-                    // flex-grow stretches items to fill each row edge-to-edge.
                     var totalSymSize = symbols.reduce(function (s, sym) { return s + sym.size; }, 0);
-                    // Target items per row based on count
                     var itemsPerRow = Math.min(symbols.length, Math.max(4, Math.ceil(Math.sqrt(symbols.length * 1.5))));
-                    // Scale so one row of average-sized items sums to ~100%
                     var avgSize = totalSymSize / symbols.length;
                     var rowBudget = avgSize * itemsPerRow;
 
                     for (var si = 0; si < symbols.length; si++) {
                         var sym = symbols[si];
                         var basisPct = (sym.size / rowBudget) * 100;
-                        // Clamp: min 3%, max 100%
                         basisPct = Math.max(3, Math.min(100, basisPct));
 
                         var symBlock = document.createElement('div');
                         symBlock.className = 'symbol-block sym-color-' + (si % SYM_COLOR_COUNT);
-                        // flex-basis sets proportional size, flex-grow fills the row
                         symBlock.style.flexBasis = basisPct + '%';
                         symBlock.style.flexGrow = String(sym.size);
                         symBlock.setAttribute('data-symbol', sym.name);
                         symBlock.setAttribute('data-section', sec.name);
+                        symBlock.setAttribute('data-address', sym.address !== undefined ? String(sym.address) : '');
+                        symBlock.setAttribute('data-source-line', sym.sourceLine !== undefined ? String(sym.sourceLine) : '');
 
-                        // Click: select symbol
-                        symBlock.addEventListener('click', (function (symbolName, sectionName, symSourceLine) {
-                            return function (e) {
-                                e.stopPropagation();
-                                window.mapViewIPC.postMessage({ type: 'selectSymbol', symbol: symbolName, section: sectionName, sourceLine: symSourceLine });
-                            };
-                        })(sym.name, sec.name, sym.sourceLine));
-
-                        // Tooltip on hover
-                        symBlock.addEventListener('mouseenter', (function (symbol) {
-                            return function (e) { showSymbolTooltip(e, symbol); };
-                        })(sym));
-                        symBlock.addEventListener('mouseleave', function () { hideTooltip(); });
-                        symBlock.addEventListener('mousemove', function (e) { moveTooltip(e); });
+                        // Index for O(1) highlight lookup — use address as primary key (unique),
+                        // fall back to section+name for symbols without addresses
+                        var symKey = sym.address !== undefined
+                            ? sec.name + '\0' + String(sym.address)
+                            : sec.name + '\0' + sym.name;
+                        symbolIndex[symKey] = symBlock;
+                        // Store symbol data for tooltip delegation
+                        symbolDataMap[symKey] = sym;
 
                         symGrid.appendChild(symBlock);
                     }
@@ -163,23 +176,10 @@
                     block.appendChild(symGrid);
                 }
 
-                // Section-level click (only fires if not caught by a symbol)
-                block.addEventListener('click', (function (sectionName, secSourceLine) {
-                    return function () {
-                        window.mapViewIPC.postMessage({ type: 'selectSection', section: sectionName, sourceLine: secSourceLine });
-                    };
-                })(sec.name, sec.sourceLine));
-
-                block.addEventListener('mouseenter', (function (section) {
-                    return function (e) { showTooltip(e, section); };
-                })(sec));
-                block.addEventListener('mouseleave', function () { hideTooltip(); });
-                block.addEventListener('mousemove', function (e) { moveTooltip(e); });
-
                 bar.appendChild(block);
             }
 
-            // Free space block (skip when all sections are zero-size, e.g. linker scripts)
+            // Free space block
             if (freeSize > 0 && !allZeroSize) {
                 var freeHeight = Math.max(MIN_SECTION_HEIGHT, (freeSize / totalForScaling) * REGION_BAR_HEIGHT);
                 var freeBlock = document.createElement('div');
@@ -206,6 +206,70 @@
 
             container.appendChild(col);
         }
+
+        fragment.appendChild(container);
+
+        // Single DOM write
+        app.innerHTML = '';
+        app.appendChild(fragment);
+
+        // Attach delegated event listeners on the container (once, not per-element)
+        container.addEventListener('click', function (e) {
+            var symBlock = e.target.closest('.symbol-block');
+            if (symBlock) {
+                e.stopPropagation();
+                window.mapViewIPC.postMessage({
+                    type: 'selectSymbol',
+                    symbol: symBlock.getAttribute('data-symbol'),
+                    section: symBlock.getAttribute('data-section'),
+                    address: symBlock.getAttribute('data-address') ? Number(symBlock.getAttribute('data-address')) : undefined,
+                    sourceLine: symBlock.getAttribute('data-source-line') ? Number(symBlock.getAttribute('data-source-line')) : undefined,
+                });
+                return;
+            }
+            var secBlock = e.target.closest('.section-block');
+            if (secBlock && !secBlock.classList.contains('free-space')) {
+                window.mapViewIPC.postMessage({
+                    type: 'selectSection',
+                    section: secBlock.getAttribute('data-section'),
+                    sourceLine: secBlock.getAttribute('data-source-line') ? Number(secBlock.getAttribute('data-source-line')) : undefined,
+                });
+            }
+        });
+
+        container.addEventListener('mouseover', function (e) {
+            var symBlock = e.target.closest('.symbol-block');
+            if (symBlock) {
+                var addr = symBlock.getAttribute('data-address');
+                var section = symBlock.getAttribute('data-section');
+                var key = addr
+                    ? section + '\0' + addr
+                    : section + '\0' + symBlock.getAttribute('data-symbol');
+                var sym = symbolDataMap[key];
+                if (sym) { showSymbolTooltip(e, sym); }
+                return;
+            }
+            var secBlock = e.target.closest('.section-block');
+            if (secBlock && !secBlock.classList.contains('free-space')) {
+                var sec = sectionDataMap[secBlock.getAttribute('data-section')];
+                if (sec) { showTooltip(e, sec); }
+            }
+        });
+
+        container.addEventListener('mouseout', function (e) {
+            var from = e.target.closest('.symbol-block') || e.target.closest('.section-block');
+            if (!from) { return; }
+            var to = e.relatedTarget ? (e.relatedTarget.closest ? e.relatedTarget.closest('.symbol-block') || e.relatedTarget.closest('.section-block') : null) : null;
+            if (from !== to) {
+                hideTooltip();
+            }
+        });
+
+        container.addEventListener('mousemove', function (e) {
+            if (e.target.closest('.symbol-block') || e.target.closest('.section-block')) {
+                moveTooltip(e);
+            }
+        });
     }
 
     function showTooltip(e, section) {
@@ -258,36 +322,45 @@
     }
 
     function clearHighlights() {
-        document.querySelectorAll('.highlighted').forEach(function (el) {
-            el.classList.remove('highlighted');
-        });
+        if (currentHighlight) {
+            if (Array.isArray(currentHighlight)) {
+                for (var i = 0; i < currentHighlight.length; i++) {
+                    currentHighlight[i].classList.remove('highlighted');
+                }
+            } else {
+                currentHighlight.classList.remove('highlighted');
+            }
+            currentHighlight = null;
+        }
     }
 
     function highlightSection(sectionName) {
         clearHighlights();
-        if (sectionName) {
-            var selector = '.section-block[data-section="' + CSS.escape(sectionName) + '"]';
-            document.querySelectorAll(selector).forEach(function (el) {
-                el.classList.add('highlighted');
-                el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
+        if (sectionName && sectionIndex[sectionName]) {
+            var els = sectionIndex[sectionName];
+            for (var i = 0; i < els.length; i++) {
+                els[i].classList.add('highlighted');
+                els[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            currentHighlight = els;
         }
     }
 
-    function highlightSymbol(symbolName, sectionName) {
+    function highlightSymbol(symbolName, sectionName, address) {
         clearHighlights();
-        if (symbolName) {
-            // Match by both symbol name and section to handle duplicate names across sections
-            var blocks = document.querySelectorAll('.symbol-block');
-            for (var i = 0; i < blocks.length; i++) {
-                var b = blocks[i];
-                if (b.getAttribute('data-symbol') === symbolName &&
-                    (!sectionName || b.getAttribute('data-section') === sectionName)) {
-                    b.classList.add('highlighted');
-                    b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    break;
-                }
-            }
+        if (!symbolName) { return; }
+        // Try address-based key first (unique), fall back to name-based
+        var el;
+        if (address !== undefined && sectionName) {
+            el = symbolIndex[sectionName + '\0' + String(address)];
+        }
+        if (!el && sectionName) {
+            el = symbolIndex[sectionName + '\0' + symbolName];
+        }
+        if (el) {
+            el.classList.add('highlighted');
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            currentHighlight = el;
         }
     }
 
@@ -296,6 +369,10 @@
         div.textContent = str;
         return div.innerHTML;
     }
+
+    // Expose highlight functions for highlight-bridge.js
+    window._mapHighlightSection = highlightSection;
+    window._mapHighlightSymbol = highlightSymbol;
 
     // Message handling from extension / main process
     window.mapViewIPC.onMessage(function (msg) {
@@ -308,7 +385,7 @@
                 highlightSection(msg.section);
                 break;
             case 'highlightSymbol':
-                highlightSymbol(msg.symbol, msg.section);
+                highlightSymbol(msg.symbol, msg.section, msg.address);
                 break;
         }
     });

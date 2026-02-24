@@ -120,12 +120,15 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryTreeIte
         return undefined;
     }
 
-    findSymbolItem(symbolName: string, sectionName: string): SymbolTreeItem | undefined {
+    findSymbolItem(symbolName: string, sectionName: string, address?: number): SymbolTreeItem | undefined {
         if (!this.layout) { return undefined; }
         for (const region of this.layout.regions) {
             for (const section of region.sections) {
                 if (section.name !== sectionName) { continue; }
-                const symbol = section.symbols.find(s => s.name === symbolName);
+                // Prefer matching by address (unique) when available
+                const symbol = address !== undefined
+                    ? section.symbols.find(s => s.address === address)
+                    : section.symbols.find(s => s.name === symbolName);
                 if (symbol) {
                     return new SymbolTreeItem(symbol);
                 }

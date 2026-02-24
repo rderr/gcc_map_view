@@ -19,6 +19,10 @@ const PALETTE = [
 // Cache decoration types so we can dispose and recreate them
 let activeDecorations: vscode.TextEditorDecorationType[] = [];
 
+// Cache to avoid redundant re-parsing when the document hasn't changed
+let lastParsedUri: string | undefined;
+let lastParsedVersion: number | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('GCC Map View: activating');
     treeProvider = new MemoryTreeProvider();
@@ -46,16 +50,27 @@ export function activate(context: vscode.ExtensionContext) {
                 if (item) {
                     treeView.reveal(item, { select: true, focus: false });
                 }
-                goToLine(sourceLine ?? item?.section.sourceLine);
+                const address = item?.section.address;
+                if (address !== undefined) {
+                    goToAddress(address, sectionName);
+                } else {
+                    goToLine(sourceLine ?? item?.section.sourceLine);
+                }
             });
 
             // Webview -> tree: click symbol in webview reveals in tree and jumps in editor
-            panel.setOnSymbolSelected((symbolName, sectionName, sourceLine) => {
-                const item = treeProvider.findSymbolItem(symbolName, sectionName);
+            panel.setOnSymbolSelected((symbolName, sectionName, address, sourceLine) => {
+                const item = treeProvider.findSymbolItem(symbolName, sectionName, address);
                 if (item) {
                     treeView.reveal(item, { select: true, focus: false, expand: true });
                 }
-                goToLine(sourceLine ?? item?.symbol.sourceLine);
+                // Use the symbol's address to find the exact line in the map file
+                const symAddr = address ?? item?.symbol.address;
+                if (symAddr !== undefined) {
+                    goToAddress(symAddr, symbolName);
+                } else {
+                    goToLine(sourceLine ?? item?.symbol.sourceLine);
+                }
             });
         })
     );
@@ -94,12 +109,12 @@ export function activate(context: vscode.ExtensionContext) {
                 if (panel) {
                     panel.highlightSection(item.section.name);
                 }
-                goToLine(item.section.sourceLine);
+                goToAddress(item.section.address, item.section.name);
             } else if (item instanceof SymbolTreeItem) {
                 if (panel && item.symbol.section) {
-                    panel.highlightSymbol(item.symbol.name, item.symbol.section);
+                    panel.highlightSymbol(item.symbol.name, item.symbol.section, item.symbol.address);
                 }
-                goToLine(item.symbol.sourceLine);
+                goToAddress(item.symbol.address, item.symbol.name);
             }
         })
     );
@@ -162,6 +177,13 @@ export function activate(context: vscode.ExtensionContext) {
 function parseDocument(document: vscode.TextDocument): void {
     const filePath = document.fileName;
     const ext = path.extname(filePath).toLowerCase();
+
+    // Skip re-parsing if the document hasn't changed since last parse
+    const docUri = document.uri.toString();
+    if (docUri === lastParsedUri && document.version === lastParsedVersion) {
+        return;
+    }
+
     const text = document.getText();
 
     let layout: MemoryLayout | undefined;
@@ -179,6 +201,9 @@ function parseDocument(document: vscode.TextDocument): void {
     } else {
         return;
     }
+
+    lastParsedUri = docUri;
+    lastParsedVersion = document.version;
 
     treeProvider.setLayout(layout);
 
@@ -204,17 +229,39 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
     }
     activeDecorations = [];
 
-    // Assign each section a color from the 12-hue palette (cycling), matching the webview map.
-    // Uses a global running index across all regions so every section gets a distinct color.
-    // Symbol lines get their own color (matching sym-color-N in the map) and are excluded
-    // from the section band so the colors don't mix.
+    // Pre-create one decoration type per palette color for symbols and sections.
+    // This avoids creating thousands of individual decoration types.
+    const symDecoTypes: vscode.TextEditorDecorationType[] = [];
+    const symDecoRanges: vscode.Range[][] = [];
+    const secDecoTypes: vscode.TextEditorDecorationType[] = [];
+    const secDecoRanges: vscode.Range[][] = [];
+    for (let c = 0; c < PALETTE.length; c++) {
+        const color = PALETTE[c];
+        symDecoTypes.push(vscode.window.createTextEditorDecorationType({
+            backgroundColor: color + '55',
+            isWholeLine: true,
+            overviewRulerColor: color,
+            overviewRulerLane: vscode.OverviewRulerLane.Left,
+        }));
+        symDecoRanges.push([]);
+        secDecoTypes.push(vscode.window.createTextEditorDecorationType({
+            backgroundColor: color + '55',
+            isWholeLine: true,
+            overviewRulerColor: color,
+            overviewRulerLane: vscode.OverviewRulerLane.Left,
+        }));
+        secDecoRanges.push([]);
+    }
+    activeDecorations.push(...symDecoTypes, ...secDecoTypes);
+
+    // Collect ranges grouped by color index
     let sectionIndex = 0;
     for (const region of layout.regions) {
         if (region.length === 0) { continue; }
         const sections = region.sections.slice().sort((a, b) => a.address - b.address);
         for (let i = 0; i < sections.length; i++) {
             const section = sections[i];
-            const sectionColor = PALETTE[sectionIndex % PALETTE.length];
+            const sectionColorIdx = sectionIndex % PALETTE.length;
             sectionIndex++;
             if (section.sourceLine === undefined || section.sourceLineEnd === undefined) { continue; }
 
@@ -225,46 +272,36 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
             for (const sym of symbols) {
                 if (sym.size === 0) { continue; }
                 if (sym.sourceLine !== undefined) {
-                    const symColor = PALETTE[visibleIndex % PALETTE.length];
+                    const symColorIdx = visibleIndex % PALETTE.length;
                     symbolLineSet.add(sym.sourceLine);
-
-                    const symDeco = vscode.window.createTextEditorDecorationType({
-                        backgroundColor: symColor + '55',
-                        isWholeLine: true,
-                        overviewRulerColor: symColor,
-                        overviewRulerLane: vscode.OverviewRulerLane.Left,
-                    });
-                    activeDecorations.push(symDeco);
-                    editor.setDecorations(symDeco, [new vscode.Range(sym.sourceLine, 0, sym.sourceLine, 0)]);
+                    symDecoRanges[symColorIdx].push(new vscode.Range(sym.sourceLine, 0, sym.sourceLine, 0));
                 }
                 visibleIndex++;
             }
 
             // Section band — build ranges that skip symbol lines
-            const sectionRanges: vscode.Range[] = [];
             let runStart = section.sourceLine;
             for (let line = section.sourceLine; line <= section.sourceLineEnd; line++) {
                 if (symbolLineSet.has(line)) {
                     if (line > runStart) {
-                        sectionRanges.push(new vscode.Range(runStart, 0, line - 1, 0));
+                        secDecoRanges[sectionColorIdx].push(new vscode.Range(runStart, 0, line - 1, 0));
                     }
                     runStart = line + 1;
                 }
             }
             if (runStart <= section.sourceLineEnd) {
-                sectionRanges.push(new vscode.Range(runStart, 0, section.sourceLineEnd, 0));
+                secDecoRanges[sectionColorIdx].push(new vscode.Range(runStart, 0, section.sourceLineEnd, 0));
             }
+        }
+    }
 
-            if (sectionRanges.length > 0) {
-                const sectionDeco = vscode.window.createTextEditorDecorationType({
-                    backgroundColor: sectionColor + '55',
-                    isWholeLine: true,
-                    overviewRulerColor: sectionColor,
-                    overviewRulerLane: vscode.OverviewRulerLane.Left,
-                });
-                activeDecorations.push(sectionDeco);
-                editor.setDecorations(sectionDeco, sectionRanges);
-            }
+    // Apply all decorations in batch (24 calls max instead of thousands)
+    for (let c = 0; c < PALETTE.length; c++) {
+        if (symDecoRanges[c].length > 0) {
+            editor.setDecorations(symDecoTypes[c], symDecoRanges[c]);
+        }
+        if (secDecoRanges[c].length > 0) {
+            editor.setDecorations(secDecoTypes[c], secDecoRanges[c]);
         }
     }
 }
@@ -285,6 +322,54 @@ async function goToLine(sourceLine: number | undefined): Promise<void> {
     const range = new vscode.Range(sourceLine, 0, sourceLine, 0);
     editor.selection = new vscode.Selection(sourceLine, 0, sourceLine, 0);
     editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+}
+
+/**
+ * Navigate to a symbol in the map file by searching for its hex address.
+ * This is more reliable than using stored line numbers because it finds the
+ * actual line containing the address string in the current file content.
+ */
+async function goToAddress(address: number, symbolName?: string): Promise<void> {
+    const layout = treeProvider.getLayout();
+    if (!layout?.sourceFile) { return; }
+
+    const uri = vscode.Uri.file(layout.sourceFile);
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.One,
+        preserveFocus: false,
+    });
+
+    // Format address as it appears in the map file.
+    // GCC map files use "0x" prefix with varying zero-padding (e.g. "0x40080000" or "0x00000100").
+    // Try both the 8-digit padded and the minimal (no leading zeros) forms.
+    const hexRaw = address.toString(16);
+    const hexPadded = '0x' + hexRaw.padStart(8, '0');
+    const hexMinimal = '0x' + hexRaw;
+    const text = doc.getText();
+    const lines = text.split('\n');
+
+    // Search for the line containing both the address and (optionally) the symbol name.
+    // Prefer an exact match (address + symbol name on the same line).
+    let bestLine = -1;
+    for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        if (ln.indexOf(hexPadded) === -1 && ln.indexOf(hexMinimal) === -1) { continue; }
+        if (symbolName && ln.indexOf(symbolName) !== -1) {
+            bestLine = i;
+            break;
+        }
+        // First line with just the address as fallback
+        if (bestLine === -1) {
+            bestLine = i;
+        }
+    }
+
+    if (bestLine >= 0) {
+        const range = new vscode.Range(bestLine, 0, bestLine, 0);
+        editor.selection = new vscode.Selection(bestLine, 0, bestLine, 0);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    }
 }
 
 /**

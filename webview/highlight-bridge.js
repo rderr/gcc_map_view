@@ -3,30 +3,17 @@
 // --- Tree → Map + Source ---
 
 window.highlightSectionFromTree = function (sectionName, sourceLine) {
-    window.mapViewIPC.onMessage._highlightSection && window.mapViewIPC.onMessage._highlightSection(sectionName);
-    var blocks = document.querySelectorAll('.section-block');
-    blocks.forEach(function (el) { el.classList.remove('highlighted'); });
-    var selector = '.section-block[data-section="' + CSS.escape(sectionName) + '"]';
-    document.querySelectorAll(selector).forEach(function (el) {
-        el.classList.add('highlighted');
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+    if (typeof window._mapHighlightSection === 'function') {
+        window._mapHighlightSection(sectionName);
+    }
     if (sourceLine !== undefined && typeof window.scrollSourceToLine === 'function') {
         window.scrollSourceToLine(sourceLine);
     }
 };
 
 window.highlightSymbolFromTree = function (symbolName, sectionName, sourceLine) {
-    document.querySelectorAll('.highlighted').forEach(function (el) { el.classList.remove('highlighted'); });
-    var blocks = document.querySelectorAll('.symbol-block');
-    for (var i = 0; i < blocks.length; i++) {
-        var b = blocks[i];
-        if (b.getAttribute('data-symbol') === symbolName &&
-            (!sectionName || b.getAttribute('data-section') === sectionName)) {
-            b.classList.add('highlighted');
-            b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            break;
-        }
+    if (typeof window._mapHighlightSymbol === 'function') {
+        window._mapHighlightSymbol(symbolName, sectionName);
     }
     if (sourceLine !== undefined && typeof window.scrollSourceToLine === 'function') {
         window.scrollSourceToLine(sourceLine);
@@ -103,18 +90,20 @@ window.highlightSymbolFromTree = function (symbolName, sectionName, sourceLine) 
         }
     }
 
+    var activeTreeRow = null;
+
     function highlightTreeNode(name, parentSectionName) {
         var treeContainer = document.getElementById('tree');
         if (!treeContainer) { return; }
 
-        // Clear previous tree highlights
-        var prev = treeContainer.querySelectorAll('.tree-row.tree-active');
-        for (var i = 0; i < prev.length; i++) {
-            prev[i].classList.remove('tree-active');
+        // Clear previous tree highlight (O(1) instead of querySelectorAll)
+        if (activeTreeRow) {
+            activeTreeRow.classList.remove('tree-active');
+            activeTreeRow = null;
         }
 
         // Search tree labels for a match
-        var labels = treeContainer.querySelectorAll('.tree-label');
+        var labels = treeContainer.getElementsByClassName('tree-label');
         for (var i = 0; i < labels.length; i++) {
             if (labels[i].textContent !== name) { continue; }
 
@@ -122,8 +111,6 @@ window.highlightSymbolFromTree = function (symbolName, sectionName, sourceLine) 
             if (parentSectionName) {
                 var parentNode = labels[i].closest('.tree-section');
                 if (!parentNode) {
-                    // This label is on a section node; check if the symbol is inside
-                    // a section with matching name
                     var ancestor = labels[i].closest('.tree-children');
                     if (ancestor) {
                         var parentLabel = ancestor.previousElementSibling;
@@ -138,6 +125,7 @@ window.highlightSymbolFromTree = function (symbolName, sectionName, sourceLine) 
             var row = labels[i].closest('.tree-row');
             if (row) {
                 row.classList.add('tree-active');
+                activeTreeRow = row;
 
                 // Expand all parent containers so the node is visible
                 var parent = row.parentElement;
