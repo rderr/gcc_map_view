@@ -41,8 +41,98 @@
             color: var(--fg);
             background: var(--bg);
             display: flex;
+            flex-direction: column;
             height: 100vh;
             overflow: hidden;
+        }
+
+        #top-panel {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        #source-panel {
+            height: 250px;
+            min-height: 80px;
+            border-top: 1px solid var(--border-color);
+            display: none;
+            flex-direction: column;
+        }
+
+        #source-panel.visible {
+            display: flex;
+        }
+
+        #source-header {
+            display: flex;
+            align-items: center;
+            padding: 4px 12px;
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        #source-header .source-title {
+            font-weight: 600;
+            color: var(--fg);
+            font-size: 12px;
+        }
+
+        #source-content-wrapper {
+            flex: 1;
+            overflow: auto;
+            background: var(--bg);
+        }
+
+        #source-content {
+            margin: 0;
+            padding: 4px 0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--fg);
+            tab-size: 4;
+        }
+
+        #source-content .source-line {
+            display: flex;
+            white-space: pre;
+            padding: 0 12px 0 0;
+        }
+
+        #source-content .source-line:hover {
+            background: var(--bg-hover);
+        }
+
+        #source-content .source-line.highlighted {
+            background: rgba(0, 122, 204, 0.25);
+        }
+
+        #source-content .line-number {
+            display: inline-block;
+            width: 5em;
+            text-align: right;
+            padding-right: 1em;
+            color: var(--fg-dim);
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        #source-content .line-text {
+            flex: 1;
+        }
+
+        #source-resize-handle {
+            height: 4px;
+            cursor: ns-resize;
+            background: transparent;
+            flex-shrink: 0;
+        }
+
+        #source-resize-handle:hover {
+            background: var(--focus-border);
         }
 
         #map-panel {
@@ -74,20 +164,34 @@
     <link rel="stylesheet" href="memoryMap.css">
 </head>
 <body>
-    <!-- Tree sidebar -->
-    <div id="tree-panel">
-        <div id="tree-search-container">
-            <input type="text" id="tree-search" placeholder="Search symbols...">
+    <!-- Top panel: tree + map side by side -->
+    <div id="top-panel">
+        <!-- Tree sidebar -->
+        <div id="tree-panel">
+            <div id="tree-search-container">
+                <input type="text" id="tree-search" placeholder="Search symbols...">
+            </div>
+            <div id="tree"></div>
         </div>
-        <div id="tree"></div>
+
+        <!-- Memory map -->
+        <div id="map-panel">
+            <div id="app">
+                <div class="no-data">Drop a .map or .ld file here, or use File &gt; Open.</div>
+            </div>
+            <div id="tooltip" class="tooltip"></div>
+        </div>
     </div>
 
-    <!-- Memory map -->
-    <div id="map-panel">
-        <div id="app">
-            <div class="no-data">Drop a .map or .ld file here, or use File &gt; Open.</div>
+    <!-- Source text panel -->
+    <div id="source-panel">
+        <div id="source-resize-handle"></div>
+        <div id="source-header">
+            <span class="source-title" id="source-filename">Source</span>
         </div>
-        <div id="tooltip" class="tooltip"></div>
+        <div id="source-content-wrapper">
+            <pre id="source-content"></pre>
+        </div>
     </div>
 
     <!-- Drag-and-drop overlay -->
@@ -97,80 +201,16 @@
     <script src="ipc-electron.js"></script>
 
     <!-- Cross-component highlight bridges -->
-    <script>
-        // Bridge: tree click → memory map highlight
-        window.highlightSectionFromTree = function (sectionName) {
-            // Re-use the memory map highlight functions (defined in memoryMap.js IIFE)
-            // They operate on the DOM directly, so we call them via a message round-trip
-            window.mapViewIPC.onMessage._highlightSection && window.mapViewIPC.onMessage._highlightSection(sectionName);
-            // Simpler: just dispatch to the existing message handler
-            var blocks = document.querySelectorAll('.section-block');
-            blocks.forEach(function (el) { el.classList.remove('highlighted'); });
-            var selector = '.section-block[data-section="' + CSS.escape(sectionName) + '"]';
-            document.querySelectorAll(selector).forEach(function (el) {
-                el.classList.add('highlighted');
-                el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-        };
-
-        window.highlightSymbolFromTree = function (symbolName, sectionName) {
-            document.querySelectorAll('.highlighted').forEach(function (el) { el.classList.remove('highlighted'); });
-            var blocks = document.querySelectorAll('.symbol-block');
-            for (var i = 0; i < blocks.length; i++) {
-                var b = blocks[i];
-                if (b.getAttribute('data-symbol') === symbolName &&
-                    (!sectionName || b.getAttribute('data-section') === sectionName)) {
-                    b.classList.add('highlighted');
-                    b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    break;
-                }
-            }
-        };
-    </script>
+    <script src="highlight-bridge.js"></script>
 
     <!-- Tree and memory map scripts -->
     <script src="tree.js"></script>
     <script src="memoryMap.js"></script>
 
+    <!-- Source panel logic -->
+    <script src="source-panel.js"></script>
+
     <!-- Drag-and-drop handler -->
-    <script>
-        (function () {
-            var overlay = document.getElementById('drop-overlay');
-            var dragCounter = 0;
-
-            document.addEventListener('dragenter', function (e) {
-                e.preventDefault();
-                dragCounter++;
-                if (overlay) { overlay.classList.add('visible'); }
-            });
-
-            document.addEventListener('dragleave', function (e) {
-                e.preventDefault();
-                dragCounter--;
-                if (dragCounter <= 0) {
-                    dragCounter = 0;
-                    if (overlay) { overlay.classList.remove('visible'); }
-                }
-            });
-
-            document.addEventListener('dragover', function (e) {
-                e.preventDefault();
-            });
-
-            document.addEventListener('drop', function (e) {
-                e.preventDefault();
-                dragCounter = 0;
-                if (overlay) { overlay.classList.remove('visible'); }
-
-                var files = e.dataTransfer && e.dataTransfer.files;
-                if (files && files.length > 0) {
-                    var filePath = files[0].path;
-                    if (filePath) {
-                        window.electronAPI.send('drop-file', filePath);
-                    }
-                }
-            });
-        })();
-    </script>
+    <script src="drop-handler.js"></script>
 </body>
 </html>

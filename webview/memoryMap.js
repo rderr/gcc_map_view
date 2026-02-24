@@ -72,17 +72,22 @@
             bar.style.minHeight = REGION_BAR_HEIGHT + 'px';
 
             // Sort sections by address
-            var sections = region.sections.filter(function (s) { return s.size > 0; });
+            var sections = region.sections.slice();
             sections.sort(function (a, b) { return a.address - b.address; });
 
             var totalForScaling = region.length;
             var totalSectionSize = sections.reduce(function (s, sec) { return s + sec.size; }, 0);
             var freeSize = region.length - totalSectionSize;
 
+            // If all sections have size 0 (e.g. linker script), distribute evenly
+            var allZeroSize = totalSectionSize === 0 && sections.length > 0;
+
             // Render section blocks
             for (var i = 0; i < sections.length; i++) {
                 var sec = sections[i];
-                var heightPx = Math.max(MIN_SECTION_HEIGHT, (sec.size / totalForScaling) * REGION_BAR_HEIGHT);
+                var heightPx = allZeroSize
+                    ? Math.max(MIN_SECTION_HEIGHT, REGION_BAR_HEIGHT / sections.length)
+                    : Math.max(MIN_SECTION_HEIGHT, (sec.size / totalForScaling) * REGION_BAR_HEIGHT);
 
                 // Filter symbols with size > 0
                 var symbols = (sec.symbols || []).filter(function (s) { return s.size > 0; });
@@ -101,7 +106,9 @@
 
                 var label = document.createElement('span');
                 label.className = 'section-label';
-                label.textContent = sec.name + ' (' + formatSize(sec.size) + ')';
+                label.textContent = sec.size > 0
+                    ? sec.name + ' (' + formatSize(sec.size) + ')'
+                    : sec.name;
                 block.appendChild(label);
 
                 // Render symbol sub-blocks as a justified wrapping grid
@@ -169,8 +176,8 @@
                 bar.appendChild(block);
             }
 
-            // Free space block
-            if (freeSize > 0) {
+            // Free space block (skip when all sections are zero-size, e.g. linker scripts)
+            if (freeSize > 0 && !allZeroSize) {
                 var freeHeight = Math.max(MIN_SECTION_HEIGHT, (freeSize / totalForScaling) * REGION_BAR_HEIGHT);
                 var freeBlock = document.createElement('div');
                 freeBlock.className = 'section-block free-space';

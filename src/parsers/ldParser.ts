@@ -3,7 +3,9 @@ import { parseSize } from '../util/format';
 
 const enum State {
     TOP_LEVEL,
+    MEMORY_PENDING,    // saw MEMORY keyword, waiting for '{'
     MEMORY_BLOCK,
+    SECTIONS_PENDING,  // saw SECTIONS keyword, waiting for '{'
     SECTIONS_BLOCK,
     SECTION_DEF,
 }
@@ -35,9 +37,34 @@ export function parseLd(text: string): MemoryLayout {
                     if (afterBrace) {
                         parseMemoryLine(afterBrace, regions);
                     }
+                } else if (/^MEMORY\s*$/.test(line)) {
+                    state = State.MEMORY_PENDING;
                 } else if (/^SECTIONS\s*\{/.test(line)) {
                     state = State.SECTIONS_BLOCK;
                     braceDepth = 1;
+                } else if (/^SECTIONS\s*$/.test(line)) {
+                    state = State.SECTIONS_PENDING;
+                }
+                break;
+            }
+
+            case State.MEMORY_PENDING: {
+                if (line === '{') {
+                    state = State.MEMORY_BLOCK;
+                    braceDepth = 1;
+                } else {
+                    // Not a MEMORY block after all
+                    state = State.TOP_LEVEL;
+                }
+                break;
+            }
+
+            case State.SECTIONS_PENDING: {
+                if (line === '{') {
+                    state = State.SECTIONS_BLOCK;
+                    braceDepth = 1;
+                } else {
+                    state = State.TOP_LEVEL;
                 }
                 break;
             }

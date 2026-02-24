@@ -98,7 +98,6 @@
 
             for (var s = 0; s < region.sections.length; s++) {
                 var sec = region.sections[s];
-                if (sec.size === 0) { continue; }
 
                 var symbolNodes = [];
                 var symbols = sec.symbols || [];
@@ -110,26 +109,30 @@
                         formatHex(sym.address) + '  ' + formatSize(sym.size),
                         'tree-symbol',
                         null,
-                        (function (symName, secName) {
+                        (function (symName, secName, symSourceLine) {
                             return function () {
                                 window.mapViewIPC.postMessage({ type: 'selectSymbol', symbol: symName, section: secName });
-                                highlightSymbolInMap(symName, secName);
+                                highlightSymbolInMap(symName, secName, symSourceLine);
                             };
-                        })(sym.name, sec.name)
+                        })(sym.name, sec.name, sym.sourceLine)
                     ));
                 }
 
+                var secDetail = sec.size > 0
+                    ? formatHex(sec.address) + '  ' + formatSize(sec.size)
+                    : (sec.address ? formatHex(sec.address) : '');
+
                 sectionNodes.push(createTreeNode(
                     sec.name,
-                    formatHex(sec.address) + '  ' + formatSize(sec.size),
+                    secDetail,
                     'tree-section',
                     symbolNodes,
-                    (function (secName) {
+                    (function (secName, secSourceLine) {
                         return function () {
                             window.mapViewIPC.postMessage({ type: 'selectSection', section: secName });
-                            highlightSectionInMap(secName);
+                            highlightSectionInMap(secName, secSourceLine);
                         };
-                    })(sec.name)
+                    })(sec.name, sec.sourceLine)
                 ));
             }
 
@@ -156,16 +159,16 @@
         }
     }
 
-    function highlightSectionInMap(sectionName) {
+    function highlightSectionInMap(sectionName, sourceLine) {
         // Send highlight to memory map (same window)
         if (typeof window.highlightSectionFromTree === 'function') {
-            window.highlightSectionFromTree(sectionName);
+            window.highlightSectionFromTree(sectionName, sourceLine);
         }
     }
 
-    function highlightSymbolInMap(symbolName, sectionName) {
+    function highlightSymbolInMap(symbolName, sectionName, sourceLine) {
         if (typeof window.highlightSymbolFromTree === 'function') {
-            window.highlightSymbolFromTree(symbolName, sectionName);
+            window.highlightSymbolFromTree(symbolName, sectionName, sourceLine);
         }
     }
 

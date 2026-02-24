@@ -88,7 +88,7 @@ function loadFile(filePath: string): void {
 
     layout.sourceFile = filePath;
     mainWindow.setTitle(`GCC Map View — ${path.basename(filePath)}`);
-    mainWindow.webContents.send('main-message', { type: 'updateLayout', layout });
+    mainWindow.webContents.send('main-message', { type: 'updateLayout', layout, sourceText: text, fileName: path.basename(filePath) });
 }
 
 // IPC: renderer → main
