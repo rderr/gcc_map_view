@@ -2,6 +2,19 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
+## [0.2.0] - 2026-02-24
+
+### Added
+- Color-coded source panel backgrounds matching the memory map section and symbol colors
+- Per-symbol line highlighting using the same palette as the map view
+- Standalone Electron app with tree view, memory map, and source panel
+- Drag-and-drop file opening in the Electron app
+- Virtual-scrolling source panel for efficient viewing of large map files
+
+### Fixed
+- Map click navigation now goes to the correct line for symbols with duplicate names
+- Section colors are now unique across all memory regions using a global palette index
+
 ## [0.1.1] - 2026-02-22
 
 ### Fixed
