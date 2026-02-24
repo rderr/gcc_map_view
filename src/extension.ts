@@ -41,21 +41,21 @@ export function activate(context: vscode.ExtensionContext) {
             panel.updateLayout(layout);
 
             // Webview -> tree + navigate: click section in webview reveals in tree and jumps in editor
-            panel.setOnSectionSelected((sectionName) => {
+            panel.setOnSectionSelected((sectionName, sourceLine) => {
                 const item = treeProvider.findSectionItem(sectionName);
                 if (item) {
                     treeView.reveal(item, { select: true, focus: false });
-                    goToLine(item.section.sourceLine);
                 }
+                goToLine(sourceLine ?? item?.section.sourceLine);
             });
 
             // Webview -> tree: click symbol in webview reveals in tree and jumps in editor
-            panel.setOnSymbolSelected((symbolName, sectionName) => {
+            panel.setOnSymbolSelected((symbolName, sectionName, sourceLine) => {
                 const item = treeProvider.findSymbolItem(symbolName, sectionName);
                 if (item) {
                     treeView.reveal(item, { select: true, focus: false, expand: true });
-                    goToLine(item.symbol.sourceLine);
                 }
+                goToLine(sourceLine ?? item?.symbol.sourceLine);
             });
         })
     );
@@ -206,26 +206,65 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
 
     // Assign each section a color from the 12-hue palette (cycling), matching the webview map.
     // Uses a global running index across all regions so every section gets a distinct color.
+    // Symbol lines get their own color (matching sym-color-N in the map) and are excluded
+    // from the section band so the colors don't mix.
     let sectionIndex = 0;
     for (const region of layout.regions) {
         if (region.length === 0) { continue; }
         const sections = region.sections.slice().sort((a, b) => a.address - b.address);
         for (let i = 0; i < sections.length; i++) {
             const section = sections[i];
-            const baseColor = PALETTE[sectionIndex % PALETTE.length];
+            const sectionColor = PALETTE[sectionIndex % PALETTE.length];
             sectionIndex++;
             if (section.sourceLine === undefined || section.sourceLineEnd === undefined) { continue; }
 
-            const sectionDeco = vscode.window.createTextEditorDecorationType({
-                backgroundColor: baseColor + '55', // ~33% opacity
-                isWholeLine: true,
-                overviewRulerColor: baseColor,
-                overviewRulerLane: vscode.OverviewRulerLane.Left,
-            });
-            activeDecorations.push(sectionDeco);
+            // Collect symbol lines with their colors (only symbols with size > 0, matching map view)
+            const symbolLineSet = new Set<number>();
+            const symbols = section.symbols || [];
+            let visibleIndex = 0;
+            for (const sym of symbols) {
+                if (sym.size === 0) { continue; }
+                if (sym.sourceLine !== undefined) {
+                    const symColor = PALETTE[visibleIndex % PALETTE.length];
+                    symbolLineSet.add(sym.sourceLine);
 
-            const sectionRange = new vscode.Range(section.sourceLine, 0, section.sourceLineEnd, 0);
-            editor.setDecorations(sectionDeco, [sectionRange]);
+                    const symDeco = vscode.window.createTextEditorDecorationType({
+                        backgroundColor: symColor + '55',
+                        isWholeLine: true,
+                        overviewRulerColor: symColor,
+                        overviewRulerLane: vscode.OverviewRulerLane.Left,
+                    });
+                    activeDecorations.push(symDeco);
+                    editor.setDecorations(symDeco, [new vscode.Range(sym.sourceLine, 0, sym.sourceLine, 0)]);
+                }
+                visibleIndex++;
+            }
+
+            // Section band — build ranges that skip symbol lines
+            const sectionRanges: vscode.Range[] = [];
+            let runStart = section.sourceLine;
+            for (let line = section.sourceLine; line <= section.sourceLineEnd; line++) {
+                if (symbolLineSet.has(line)) {
+                    if (line > runStart) {
+                        sectionRanges.push(new vscode.Range(runStart, 0, line - 1, 0));
+                    }
+                    runStart = line + 1;
+                }
+            }
+            if (runStart <= section.sourceLineEnd) {
+                sectionRanges.push(new vscode.Range(runStart, 0, section.sourceLineEnd, 0));
+            }
+
+            if (sectionRanges.length > 0) {
+                const sectionDeco = vscode.window.createTextEditorDecorationType({
+                    backgroundColor: sectionColor + '55',
+                    isWholeLine: true,
+                    overviewRulerColor: sectionColor,
+                    overviewRulerLane: vscode.OverviewRulerLane.Left,
+                });
+                activeDecorations.push(sectionDeco);
+                editor.setDecorations(sectionDeco, sectionRanges);
+            }
         }
     }
 }

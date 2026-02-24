@@ -8,8 +8,8 @@ export class MemoryMapPanel {
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionPath: string;
     private disposables: vscode.Disposable[] = [];
-    private onSectionSelected: ((sectionName: string) => void) | undefined;
-    private onSymbolSelected: ((symbolName: string, sectionName: string) => void) | undefined;
+    private onSectionSelected: ((sectionName: string, sourceLine?: number) => void) | undefined;
+    private onSymbolSelected: ((symbolName: string, sectionName: string, sourceLine?: number) => void) | undefined;
 
     private constructor(panel: vscode.WebviewPanel, extensionPath: string) {
         this.panel = panel;
@@ -20,9 +20,9 @@ export class MemoryMapPanel {
         this.panel.webview.onDidReceiveMessage(
             (message) => {
                 if (message.type === 'selectSection' && this.onSectionSelected) {
-                    this.onSectionSelected(message.section);
+                    this.onSectionSelected(message.section, message.sourceLine);
                 } else if (message.type === 'selectSymbol' && this.onSymbolSelected) {
-                    this.onSymbolSelected(message.symbol, message.section);
+                    this.onSymbolSelected(message.symbol, message.section, message.sourceLine);
                 }
             },
             null,
@@ -61,11 +61,11 @@ export class MemoryMapPanel {
         return MemoryMapPanel.currentPanel;
     }
 
-    setOnSectionSelected(callback: (sectionName: string) => void): void {
+    setOnSectionSelected(callback: (sectionName: string, sourceLine?: number) => void): void {
         this.onSectionSelected = callback;
     }
 
-    setOnSymbolSelected(callback: (symbolName: string, sectionName: string) => void): void {
+    setOnSymbolSelected(callback: (symbolName: string, sectionName: string, sourceLine?: number) => void): void {
         this.onSymbolSelected = callback;
     }
 
