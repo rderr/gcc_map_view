@@ -7,67 +7,108 @@
 body {
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground);
-    background: var(--vscode-editor-background);
-    padding: 16px;
+    color: var(--vscode-foreground, #ccc);
+    background: var(--vscode-editor-background, #1e1e1e);
 }
 
+/* ── Single scrolling layout ── */
+.app-layout {
+    display: flex;
+    align-items: flex-start;
+    position: relative;
+    padding: 16px;
+    gap: 0;
+    min-height: 100vh;
+}
+
+#app {
+    width: 260px;
+    flex-shrink: 0;
+}
+
+/* ── SVG connector ── */
+#connector-svg {
+    width: 48px;
+    flex-shrink: 0;
+    display: none;
+    pointer-events: none;
+    overflow: visible;
+    align-self: stretch;
+}
+
+#connector-svg.visible {
+    display: block;
+}
+
+/* ── Detail panel ── */
+#detail-panel {
+    display: none;
+    flex: 1;
+    min-width: 240px;
+    max-width: 400px;
+    flex-direction: column;
+    background: var(--vscode-editor-background, #1e1e1e);
+}
+
+#detail-panel.visible {
+    display: flex;
+}
+
+/* ── Region layout ── */
 h1 {
     font-size: 1.3em;
     font-weight: 600;
     margin-bottom: 16px;
-    color: var(--vscode-foreground);
+    color: var(--vscode-foreground, #ccc);
 }
 
 .memory-container {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 24px;
-    align-items: flex-start;
 }
 
 .region-column {
-    flex: 1;
-    min-width: 250px;
-    max-width: 500px;
+    width: 100%;
 }
 
 .region-header {
     font-weight: 600;
     font-size: 1.1em;
     margin-bottom: 4px;
-    color: var(--vscode-foreground);
+    color: var(--vscode-foreground, #ccc);
 }
 
 .region-info {
-    font-size: 0.85em;
-    color: var(--vscode-descriptionForeground);
+    font-size: 0.82em;
+    color: var(--vscode-descriptionForeground, #888);
     margin-bottom: 8px;
 }
 
 .region-bar {
     width: 100%;
-    border: 1px solid var(--vscode-panel-border, #444);
+    border: 1px solid var(--vscode-panel-border, #333);
     border-radius: 4px;
-    background: var(--vscode-editor-background);
+    background: #111;
     position: relative;
     overflow: hidden;
 }
 
+/* ── Section blocks ── */
 .section-block {
     width: 100%;
     position: relative;
     cursor: pointer;
     transition: filter 0.15s, outline 0.15s;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     justify-content: center;
-    min-height: 40px;
-    border-bottom: 1px solid var(--vscode-panel-border, #333);
+    min-height: 28px;
+    border-bottom: 1px solid rgba(0,0,0,0.3);
 }
 
 .section-block:hover {
-    filter: brightness(1.2);
+    filter: brightness(1.25);
 }
 
 .section-block.highlighted {
@@ -77,131 +118,60 @@ h1 {
     z-index: 1;
 }
 
+.section-block.selected {
+    outline: 2px solid #fff;
+    outline-offset: -2px;
+    z-index: 2;
+    filter: brightness(1.15);
+}
+
 .section-label {
-    font-size: 0.8em;
+    font-size: 0.82em;
+    font-weight: 600;
     color: #fff;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 2px 6px;
+    padding: 2px 8px 0;
     pointer-events: none;
 }
 
+.section-info {
+    font-size: 0.7em;
+    font-family: var(--vscode-editor-font-family, monospace);
+    color: rgba(255,255,255,0.6);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    padding: 0 8px 2px;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Free space */
 .free-space {
-    background: repeating-linear-gradient(
-        45deg,
-        transparent,
-        transparent 4px,
-        var(--vscode-panel-border, #333) 4px,
-        var(--vscode-panel-border, #333) 5px
-    );
-    opacity: 0.4;
+    background: #111 !important;
     cursor: default;
 }
 
 .free-space .section-label {
-    color: var(--vscode-descriptionForeground);
+    color: var(--vscode-descriptionForeground, #666);
     text-shadow: none;
+    font-weight: 400;
 }
 
-/* Default section background (overridden by inline style) */
+.free-space .section-info {
+    display: none;
+}
+
 .section-block { background: #555; }
 
-/* Section block: switch to vertical flex to hold symbol grid */
-.section-block.has-symbols {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-    padding: 0;
-    height: auto !important;
-}
-
-.section-block.has-symbols > .section-label {
-    padding: 1px 6px;
-    flex-shrink: 0;
-}
-
-/* Symbol grid inside sections */
-.symbol-grid {
-    display: flex;
-    flex-wrap: wrap;
-    flex: 1;
-    align-content: flex-start;
-    min-height: 0;
-}
-
-.symbol-block {
-    cursor: pointer;
-    transition: filter 0.15s, outline 0.15s;
-    min-width: 6px;
-    height: 16px;
-    position: relative;
-    flex-grow: 1;
-    border-right: 1px solid rgba(0,0,0,0.2);
-    border-bottom: 1px solid rgba(0,0,0,0.2);
-}
-
-.symbol-block:hover {
-    filter: brightness(1.4);
-    z-index: 2;
-}
-
-.symbol-block.highlighted {
-    outline: 2px solid var(--vscode-focusBorder, #007acc);
-    outline-offset: -1px;
-    filter: brightness(1.5);
-    z-index: 3;
-}
-
-/* Symbol color palette — 12-color colorblind-safe (Paul Tol) */
-.sym-color-0  { background: #4477AA; }
-.sym-color-1  { background: #66CCEE; }
-.sym-color-2  { background: #228833; }
-.sym-color-3  { background: #CCBB44; }
-.sym-color-4  { background: #EE6677; }
-.sym-color-5  { background: #AA3377; }
-.sym-color-6  { background: #BBBBBB; }
-.sym-color-7  { background: #EE8866; }
-.sym-color-8  { background: #44BB99; }
-.sym-color-9  { background: #99DDFF; }
-.sym-color-10 { background: #EEDD88; }
-.sym-color-11 { background: #FFAABB; }
-
-/* Tooltip */
-.tooltip {
-    display: none;
-    position: fixed;
-    background: var(--vscode-editorHoverWidget-background, #252526);
-    border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
-    color: var(--vscode-editorHoverWidget-foreground, #ccc);
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 0.85em;
-    pointer-events: none;
-    z-index: 100;
-    max-width: 350px;
-    line-height: 1.5;
-    overflow-wrap: break-word;
-    word-break: break-all;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-}
-
-.tooltip.visible {
-    display: block;
-}
-
-.tooltip-title {
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-/* Usage bar under region */
+/* ── Usage bar ── */
 .usage-bar-container {
     width: 100%;
     height: 6px;
-    background: var(--vscode-progressBar-background, #333);
+    background: #222;
     border-radius: 3px;
     margin-top: 6px;
     overflow: hidden;
@@ -217,10 +187,79 @@ h1 {
 .usage-medium { background: #f39c12; }
 .usage-high   { background: #e74c3c; }
 
-/* No data message */
+/* ── Detail panel internals ── */
+.detail-header {
+    padding: 12px 14px 8px;
+    flex-shrink: 0;
+}
+
+.detail-header-title {
+    font-weight: 600;
+    font-size: 1.05em;
+    margin-bottom: 2px;
+}
+
+.detail-header-info {
+    font-size: 0.82em;
+    color: var(--vscode-descriptionForeground, #888);
+    line-height: 1.5;
+}
+
+.detail-bar {
+    background: #111;
+    position: relative;
+    overflow: hidden;
+}
+
+.detail-row {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(0,0,0,0.3);
+    transition: filter 0.15s;
+    min-height: 22px;
+    position: relative;
+}
+
+.detail-row:hover {
+    filter: brightness(1.3);
+}
+
+.detail-row.highlighted {
+    outline: 2px solid var(--vscode-focusBorder, #007acc);
+    outline-offset: -2px;
+    filter: brightness(1.4);
+    z-index: 1;
+}
+
+.detail-row-name {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 1px 8px 0;
+}
+
+.detail-row-info {
+    font-size: 0.68em;
+    font-family: var(--vscode-editor-font-family, monospace);
+    color: rgba(255,255,255,0.55);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    padding: 0 8px 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── No data ── */
 .no-data {
     text-align: center;
     padding: 48px;
-    color: var(--vscode-descriptionForeground);
+    color: var(--vscode-descriptionForeground, #666);
     font-style: italic;
 }

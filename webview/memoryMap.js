@@ -1,22 +1,18 @@
 (function () {
-    const MIN_SECTION_HEIGHT = 40;
+    const MIN_SECTION_HEIGHT = 28;
     const REGION_BAR_HEIGHT = 700;
-    const SYM_COLOR_COUNT = 12;
-
-    // 12-color colorblind-safe palette (Paul Tol qualitative scheme)
     const SECTION_COLORS = [
         '#4477AA', '#66CCEE', '#228833', '#CCBB44', '#EE6677', '#AA3377',
         '#BBBBBB', '#EE8866', '#44BB99', '#99DDFF', '#EEDD88', '#FFAABB',
     ];
 
     let layoutData = null;
-
-    // Index for O(1) highlight lookups: "section\0symbol" -> element
-    var symbolIndex = {};
-    // Index for section blocks: "sectionName" -> [elements]
     var sectionIndex = {};
-    // Currently highlighted element
     var currentHighlight = null;
+    var currentSelectedSection = null;
+    var currentSelectedColorIdx = 0;
+    var detailSymbolIndex = {};
+    var sectionDataMap = {};
 
     function formatHex(value, width) {
         width = width || 8;
@@ -34,28 +30,40 @@
         return (used / total) * 100;
     }
 
-    // Lookup table from symbol data-key to symbol data object (for tooltip on hover)
-    var symbolDataMap = {};
-    // Lookup table from section data-section to section data object (for tooltip on hover)
-    var sectionDataMap = {};
+    function shadeColor(hex, amount) {
+        var num = parseInt(hex.replace('#', ''), 16);
+        var r = Math.min(255, Math.max(0, (num >> 16) + amount));
+        var g = Math.min(255, Math.max(0, ((num >> 8) & 0xFF) + amount));
+        var b = Math.min(255, Math.max(0, (num & 0xFF) + amount));
+        return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function colorWithAlpha(hex, alpha) {
+        var num = parseInt(hex.replace('#', ''), 16);
+        var r = (num >> 16) & 0xFF;
+        var g = (num >> 8) & 0xFF;
+        var b = num & 0xFF;
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    // ── Render ──
 
     function render(layout) {
         var app = document.getElementById('app');
         if (!app) { return; }
 
-        // Reset indexes
-        symbolIndex = {};
         sectionIndex = {};
-        symbolDataMap = {};
         sectionDataMap = {};
         currentHighlight = null;
+        currentSelectedSection = null;
+        detailSymbolIndex = {};
+        hideDetail();
 
         if (!layout || !layout.regions || layout.regions.length === 0) {
             app.innerHTML = '<div class="no-data">No memory layout data available.<br>Open a .ld or .map file to visualize memory.</div>';
             return;
         }
 
-        // Build DOM in a document fragment to avoid repeated reflows
         var fragment = document.createDocumentFragment();
 
         var heading = document.createElement('h1');
@@ -65,7 +73,7 @@
         var container = document.createElement('div');
         container.className = 'memory-container';
 
-        var globalSectionIndex = 0;
+        var globalSectionIdx = 0;
         for (var r = 0; r < layout.regions.length; r++) {
             var region = layout.regions[r];
             if (region.length === 0) { continue; }
@@ -83,103 +91,56 @@
 
             var info = document.createElement('div');
             info.className = 'region-info';
-            info.textContent = formatHex(region.origin) + ' | ' + formatSize(region.length) + ' (' + pct.toFixed(1) + '% used)';
+            info.textContent = formatHex(region.origin) + ' \u2502 ' + formatSize(region.length) + ' (' + pct.toFixed(1) + '% used)';
             col.appendChild(info);
 
             var bar = document.createElement('div');
             bar.className = 'region-bar';
             bar.style.minHeight = REGION_BAR_HEIGHT + 'px';
 
-            // Sort sections by address
             var sections = region.sections.slice();
             sections.sort(function (a, b) { return a.address - b.address; });
 
             var totalForScaling = region.length;
             var totalSectionSize = sections.reduce(function (s, sec) { return s + sec.size; }, 0);
             var freeSize = region.length - totalSectionSize;
-
-            // If all sections have size 0 (e.g. linker script), distribute evenly
             var allZeroSize = totalSectionSize === 0 && sections.length > 0;
 
-            // Render section blocks
             for (var i = 0; i < sections.length; i++) {
                 var sec = sections[i];
                 var heightPx = allZeroSize
                     ? Math.max(MIN_SECTION_HEIGHT, REGION_BAR_HEIGHT / sections.length)
                     : Math.max(MIN_SECTION_HEIGHT, (sec.size / totalForScaling) * REGION_BAR_HEIGHT);
 
-                // Filter symbols with size > 0
-                var symbols = (sec.symbols || []).filter(function (s) { return s.size > 0; });
-
                 var block = document.createElement('div');
                 block.className = 'section-block';
-                var sectionColor = SECTION_COLORS[globalSectionIndex % SECTION_COLORS.length];
-                globalSectionIndex++;
+                var colorIdx = globalSectionIdx % SECTION_COLORS.length;
+                var sectionColor = SECTION_COLORS[colorIdx];
+                globalSectionIdx++;
                 block.style.background = sectionColor;
-                if (symbols.length > 0) {
-                    block.className += ' has-symbols';
-                    block.style.minHeight = heightPx + 'px';
-                } else {
-                    block.style.height = heightPx + 'px';
-                }
+                block.style.height = heightPx + 'px';
                 block.setAttribute('data-section', sec.name);
+                block.setAttribute('data-color-index', String(colorIdx));
                 block.setAttribute('data-source-line', sec.sourceLine !== undefined ? String(sec.sourceLine) : '');
 
-                // Store section data for tooltip delegation
                 sectionDataMap[sec.name] = sec;
                 if (!sectionIndex[sec.name]) { sectionIndex[sec.name] = []; }
                 sectionIndex[sec.name].push(block);
 
                 var label = document.createElement('span');
                 label.className = 'section-label';
-                label.textContent = sec.size > 0
-                    ? sec.name + ' (' + formatSize(sec.size) + ')'
-                    : sec.name;
+                label.textContent = sec.name;
                 block.appendChild(label);
 
-                // Render symbol sub-blocks as a justified wrapping grid
-                if (symbols.length > 0) {
-                    var symGrid = document.createElement('div');
-                    symGrid.className = 'symbol-grid';
-
-                    var totalSymSize = symbols.reduce(function (s, sym) { return s + sym.size; }, 0);
-                    var itemsPerRow = Math.min(symbols.length, Math.max(4, Math.ceil(Math.sqrt(symbols.length * 1.5))));
-                    var avgSize = totalSymSize / symbols.length;
-                    var rowBudget = avgSize * itemsPerRow;
-
-                    for (var si = 0; si < symbols.length; si++) {
-                        var sym = symbols[si];
-                        var basisPct = (sym.size / rowBudget) * 100;
-                        basisPct = Math.max(3, Math.min(100, basisPct));
-
-                        var symBlock = document.createElement('div');
-                        symBlock.className = 'symbol-block sym-color-' + (si % SYM_COLOR_COUNT);
-                        symBlock.style.flexBasis = basisPct + '%';
-                        symBlock.style.flexGrow = String(sym.size);
-                        symBlock.setAttribute('data-symbol', sym.name);
-                        symBlock.setAttribute('data-section', sec.name);
-                        symBlock.setAttribute('data-address', sym.address !== undefined ? String(sym.address) : '');
-                        symBlock.setAttribute('data-source-line', sym.sourceLine !== undefined ? String(sym.sourceLine) : '');
-
-                        // Index for O(1) highlight lookup — use address as primary key (unique),
-                        // fall back to section+name for symbols without addresses
-                        var symKey = sym.address !== undefined
-                            ? sec.name + '\0' + String(sym.address)
-                            : sec.name + '\0' + sym.name;
-                        symbolIndex[symKey] = symBlock;
-                        // Store symbol data for tooltip delegation
-                        symbolDataMap[symKey] = sym;
-
-                        symGrid.appendChild(symBlock);
-                    }
-
-                    block.appendChild(symGrid);
-                }
+                var infoLine = document.createElement('span');
+                infoLine.className = 'section-info';
+                infoLine.textContent = formatHex(sec.address) + '  ' + formatSize(sec.size) +
+                    (sec.symbols ? '  (' + sec.symbols.length + ' sym)' : '');
+                block.appendChild(infoLine);
 
                 bar.appendChild(block);
             }
 
-            // Free space block
             if (freeSize > 0 && !allZeroSize) {
                 var freeHeight = Math.max(MIN_SECTION_HEIGHT, (freeSize / totalForScaling) * REGION_BAR_HEIGHT);
                 var freeBlock = document.createElement('div');
@@ -187,14 +148,13 @@
                 freeBlock.style.height = freeHeight + 'px';
                 var freeLabel = document.createElement('span');
                 freeLabel.className = 'section-label';
-                freeLabel.textContent = 'Free (' + formatSize(freeSize) + ')';
+                freeLabel.textContent = 'Free \u2014 ' + formatSize(freeSize);
                 freeBlock.appendChild(freeLabel);
                 bar.appendChild(freeBlock);
             }
 
             col.appendChild(bar);
 
-            // Usage bar
             var usageBarContainer = document.createElement('div');
             usageBarContainer.className = 'usage-bar-container';
             var usageBarFill = document.createElement('div');
@@ -208,118 +168,227 @@
         }
 
         fragment.appendChild(container);
-
-        // Single DOM write
         app.innerHTML = '';
         app.appendChild(fragment);
 
-        // Attach delegated event listeners on the container (once, not per-element)
+        // ── Event delegation ──
         container.addEventListener('click', function (e) {
-            var symBlock = e.target.closest('.symbol-block');
-            if (symBlock) {
-                e.stopPropagation();
-                window.mapViewIPC.postMessage({
-                    type: 'selectSymbol',
-                    symbol: symBlock.getAttribute('data-symbol'),
-                    section: symBlock.getAttribute('data-section'),
-                    address: symBlock.getAttribute('data-address') ? Number(symBlock.getAttribute('data-address')) : undefined,
-                    sourceLine: symBlock.getAttribute('data-source-line') ? Number(symBlock.getAttribute('data-source-line')) : undefined,
-                });
-                return;
-            }
             var secBlock = e.target.closest('.section-block');
             if (secBlock && !secBlock.classList.contains('free-space')) {
+                var secName = secBlock.getAttribute('data-section');
+                var cIdx = Number(secBlock.getAttribute('data-color-index'));
+                var secData = sectionDataMap[secName];
+
                 window.mapViewIPC.postMessage({
                     type: 'selectSection',
-                    section: secBlock.getAttribute('data-section'),
+                    section: secName,
                     sourceLine: secBlock.getAttribute('data-source-line') ? Number(secBlock.getAttribute('data-source-line')) : undefined,
+                });
+
+                if (secData) {
+                    showDetail(secData, cIdx, secBlock);
+                }
+            }
+        });
+    }
+
+    // ── Detail panel ──
+
+    function showDetail(section, colorIndex, sectionBlock) {
+        var panel = document.getElementById('detail-panel');
+        if (!panel) { return; }
+
+        if (currentSelectedSection) {
+            currentSelectedSection.classList.remove('selected');
+        }
+        currentSelectedSection = sectionBlock;
+        currentSelectedColorIdx = colorIndex;
+        if (sectionBlock) {
+            sectionBlock.classList.add('selected');
+        }
+
+        detailSymbolIndex = {};
+
+        var symbols = (section.symbols || []).filter(function (s) { return s.size > 0; });
+        symbols.sort(function (a, b) { return (a.address || 0) - (b.address || 0); });
+
+        var baseColor = SECTION_COLORS[colorIndex % SECTION_COLORS.length];
+
+        // Header
+        var headerDiv = document.createElement('div');
+        headerDiv.className = 'detail-header';
+
+        var title = document.createElement('div');
+        title.className = 'detail-header-title';
+        title.style.color = baseColor;
+        title.textContent = section.name + '  \u2014  ' + formatSize(section.size);
+        headerDiv.appendChild(title);
+
+        var infoDiv = document.createElement('div');
+        infoDiv.className = 'detail-header-info';
+        infoDiv.textContent = formatHex(section.address) + ' \u2502 ' + symbols.length + ' symbols';
+        headerDiv.appendChild(infoDiv);
+
+        // Symbol bar — tall enough to list every symbol
+        var detailBar = document.createElement('div');
+        detailBar.className = 'detail-bar';
+
+        var totalSymSize = symbols.reduce(function (s, sym) { return s + sym.size; }, 0);
+        var MIN_ROW = 32;
+
+        for (var i = 0; i < symbols.length; i++) {
+            var sym = symbols[i];
+            var rowHeight = MIN_ROW;
+
+            var row = document.createElement('div');
+            row.className = 'detail-row';
+            row.style.height = rowHeight + 'px';
+            row.style.background = shadeColor(baseColor, (i % 2 === 0) ? -30 : -50);
+            row.setAttribute('data-symbol', sym.name);
+            row.setAttribute('data-section', section.name);
+            row.setAttribute('data-address', sym.address !== undefined ? String(sym.address) : '');
+            row.setAttribute('data-source-line', sym.sourceLine !== undefined ? String(sym.sourceLine) : '');
+
+            var symKey = sym.address !== undefined
+                ? section.name + '\0' + String(sym.address)
+                : section.name + '\0' + sym.name;
+            detailSymbolIndex[symKey] = row;
+
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'detail-row-name';
+            nameSpan.textContent = sym.name;
+            row.appendChild(nameSpan);
+
+            var infoSpan = document.createElement('span');
+            infoSpan.className = 'detail-row-info';
+            infoSpan.textContent = (sym.address !== undefined ? formatHex(sym.address) : '') + '  ' + formatSize(sym.size);
+            row.appendChild(infoSpan);
+
+            detailBar.appendChild(row);
+        }
+
+        if (symbols.length === 0) {
+            var emptyMsg = document.createElement('div');
+            emptyMsg.style.padding = '24px 14px';
+            emptyMsg.style.color = 'var(--vscode-descriptionForeground, #666)';
+            emptyMsg.style.fontStyle = 'italic';
+            emptyMsg.textContent = 'No symbols in this section.';
+            detailBar.appendChild(emptyMsg);
+        }
+
+        detailBar.addEventListener('click', function (e) {
+            var row = e.target.closest('.detail-row');
+            if (row) {
+                window.mapViewIPC.postMessage({
+                    type: 'selectSymbol',
+                    symbol: row.getAttribute('data-symbol'),
+                    section: row.getAttribute('data-section'),
+                    address: row.getAttribute('data-address') ? Number(row.getAttribute('data-address')) : undefined,
+                    sourceLine: row.getAttribute('data-source-line') ? Number(row.getAttribute('data-source-line')) : undefined,
                 });
             }
         });
 
-        container.addEventListener('mouseover', function (e) {
-            var symBlock = e.target.closest('.symbol-block');
-            if (symBlock) {
-                var addr = symBlock.getAttribute('data-address');
-                var section = symBlock.getAttribute('data-section');
-                var key = addr
-                    ? section + '\0' + addr
-                    : section + '\0' + symBlock.getAttribute('data-symbol');
-                var sym = symbolDataMap[key];
-                if (sym) { showSymbolTooltip(e, sym); }
-                return;
-            }
-            var secBlock = e.target.closest('.section-block');
-            if (secBlock && !secBlock.classList.contains('free-space')) {
-                var sec = sectionDataMap[secBlock.getAttribute('data-section')];
-                if (sec) { showTooltip(e, sec); }
-            }
-        });
+        panel.innerHTML = '';
+        panel.appendChild(headerDiv);
+        panel.appendChild(detailBar);
+        panel.classList.add('visible');
 
-        container.addEventListener('mouseout', function (e) {
-            var from = e.target.closest('.symbol-block') || e.target.closest('.section-block');
-            if (!from) { return; }
-            var to = e.relatedTarget ? (e.relatedTarget.closest ? e.relatedTarget.closest('.symbol-block') || e.relatedTarget.closest('.section-block') : null) : null;
-            if (from !== to) {
-                hideTooltip();
-            }
-        });
+        var svg = document.getElementById('connector-svg');
+        if (svg) { svg.classList.add('visible'); }
 
-        container.addEventListener('mousemove', function (e) {
-            if (e.target.closest('.symbol-block') || e.target.closest('.section-block')) {
-                moveTooltip(e);
-            }
+        // Position the detail panel and draw connector after layout settles
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                positionDetailPanel();
+                drawConnector();
+            });
         });
     }
 
-    function showTooltip(e, section) {
-        var tooltip = document.getElementById('tooltip');
-        if (!tooltip) { return; }
-        tooltip.innerHTML =
-            '<div class="tooltip-title">' + escapeHtml(section.name) + '</div>' +
-            'Address: ' + formatHex(section.address) + '<br>' +
-            'Size: ' + formatSize(section.size) + '<br>' +
-            (section.region ? 'Region: ' + escapeHtml(section.region) + '<br>' : '') +
-            'Symbols: ' + (section.symbols ? section.symbols.length : 0);
-        tooltip.classList.add('visible');
-        moveTooltip(e);
+    function hideDetail() {
+        var panel = document.getElementById('detail-panel');
+        if (panel) {
+            panel.classList.remove('visible');
+            panel.innerHTML = '';
+            panel.style.marginTop = '0';
+        }
+        var svg = document.getElementById('connector-svg');
+        if (svg) {
+            svg.classList.remove('visible');
+            svg.innerHTML = '';
+        }
+        if (currentSelectedSection) {
+            currentSelectedSection.classList.remove('selected');
+            currentSelectedSection = null;
+        }
     }
 
-    function showSymbolTooltip(e, symbol) {
-        e.stopPropagation();
-        var tooltip = document.getElementById('tooltip');
-        if (!tooltip) { return; }
-        tooltip.innerHTML =
-            '<div class="tooltip-title">' + escapeHtml(symbol.name) + '</div>' +
-            'Address: ' + formatHex(symbol.address) + '<br>' +
-            'Size: ' + formatSize(symbol.size) +
-            (symbol.sourceFile ? '<br>Source: ' + escapeHtml(symbol.sourceFile) : '');
-        tooltip.classList.add('visible');
-        moveTooltip(e);
+    function positionDetailPanel() {
+        var panel = document.getElementById('detail-panel');
+        if (!panel || !currentSelectedSection) { return; }
+
+        var layout = document.querySelector('.app-layout');
+        if (!layout) { return; }
+        var layoutRect = layout.getBoundingClientRect();
+
+        // We want the detail-bar (symbol list) top to align with the section top.
+        // The panel has a header above the bar, so offset by the header height.
+        var detailBar = panel.querySelector('.detail-bar');
+        var headerHeight = detailBar ? detailBar.offsetTop : 0;
+
+        var srcRect = currentSelectedSection.getBoundingClientRect();
+        var desiredTop = srcRect.top - layoutRect.top - headerHeight;
+        desiredTop = Math.max(0, desiredTop);
+
+        panel.style.marginTop = desiredTop + 'px';
     }
 
-    function moveTooltip(e) {
-        var tooltip = document.getElementById('tooltip');
-        if (!tooltip) { return; }
-        var gap = 12;
-        var x = e.clientX + gap;
-        var y = e.clientY + gap;
-        var tw = tooltip.offsetWidth;
-        var th = tooltip.offsetHeight;
-        var vw = document.documentElement.clientWidth;
-        var vh = document.documentElement.clientHeight;
-        if (x + tw > vw) { x = e.clientX - tw - gap; }
-        if (y + th > vh) { y = e.clientY - th - gap; }
-        if (x < 0) { x = 0; }
-        if (y < 0) { y = 0; }
-        tooltip.style.left = x + 'px';
-        tooltip.style.top = y + 'px';
+    function drawConnector() {
+        var svg = document.getElementById('connector-svg');
+        var panel = document.getElementById('detail-panel');
+        if (!svg || !panel || !currentSelectedSection) { return; }
+
+        var svgRect = svg.getBoundingClientRect();
+        var svgW = svgRect.width;
+        var svgH = svgRect.height;
+        if (svgW === 0 || svgH === 0) { return; }
+
+        svg.setAttribute('width', String(svgW));
+        svg.setAttribute('height', String(svgH));
+        svg.setAttribute('viewBox', '0 0 ' + svgW + ' ' + svgH);
+        svg.innerHTML = '';
+
+        // Draw a horizontal line from the section across the gap and the full width of the symbol list
+        var detailBar = panel.querySelector('.detail-bar');
+        var dstRect = detailBar ? detailBar.getBoundingClientRect() : panel.getBoundingClientRect();
+        var y = dstRect.top - svgRect.top + 1;
+
+        // Extend the line past the SVG into the detail bar (full width of it)
+        var lineEndX = svgW + dstRect.width;
+
+        var baseColor = SECTION_COLORS[currentSelectedColorIdx % SECTION_COLORS.length];
+
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', '0');
+        line.setAttribute('y1', String(y));
+        line.setAttribute('x2', String(lineEndX));
+        line.setAttribute('y2', String(y));
+        line.setAttribute('stroke', colorWithAlpha(baseColor, 0.7));
+        line.setAttribute('stroke-width', '2');
+        svg.appendChild(line);
     }
 
-    function hideTooltip() {
-        var tooltip = document.getElementById('tooltip');
-        if (tooltip) { tooltip.classList.remove('visible'); }
-    }
+    window.addEventListener('resize', function () {
+        if (currentSelectedSection) {
+            requestAnimationFrame(function () {
+                positionDetailPanel();
+                drawConnector();
+            });
+        }
+    });
+
+    // ── Highlights ──
 
     function clearHighlights() {
         if (currentHighlight) {
@@ -349,18 +418,21 @@
     function highlightSymbol(symbolName, sectionName, address) {
         clearHighlights();
         if (!symbolName) { return; }
-        // Try address-based key first (unique), fall back to name-based
+
+        if (sectionName) {
+            highlightSection(sectionName);
+        }
+
         var el;
         if (address !== undefined && sectionName) {
-            el = symbolIndex[sectionName + '\0' + String(address)];
+            el = detailSymbolIndex[sectionName + '\0' + String(address)];
         }
         if (!el && sectionName) {
-            el = symbolIndex[sectionName + '\0' + symbolName];
+            el = detailSymbolIndex[sectionName + '\0' + symbolName];
         }
         if (el) {
             el.classList.add('highlighted');
             el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            currentHighlight = el;
         }
     }
 
@@ -370,11 +442,9 @@
         return div.innerHTML;
     }
 
-    // Expose highlight functions for highlight-bridge.js
     window._mapHighlightSection = highlightSection;
     window._mapHighlightSymbol = highlightSymbol;
 
-    // Message handling from extension / main process
     window.mapViewIPC.onMessage(function (msg) {
         switch (msg.type) {
             case 'updateLayout':
