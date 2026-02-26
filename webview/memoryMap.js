@@ -328,20 +328,30 @@
         var panel = document.getElementById('detail-panel');
         if (!panel || !currentSelectedSection) { return; }
 
+        // Reset margin so measurements are clean
+        panel.style.marginTop = '0px';
+
+        // Force layout so getBoundingClientRect reflects the reset
+        panel.offsetHeight;
+
         var layout = document.querySelector('.app-layout');
         if (!layout) { return; }
         var layoutRect = layout.getBoundingClientRect();
 
-        // We want the detail-bar (symbol list) top to align with the section top.
-        // The panel has a header above the bar, so offset by the header height.
-        var detailBar = panel.querySelector('.detail-bar');
-        var headerHeight = detailBar ? detailBar.offsetTop : 0;
-
+        // Where the section block is
         var srcRect = currentSelectedSection.getBoundingClientRect();
-        var desiredTop = srcRect.top - layoutRect.top - headerHeight;
-        desiredTop = Math.max(0, desiredTop);
+        var sectionTop = srcRect.top - layoutRect.top;
 
-        panel.style.marginTop = desiredTop + 'px';
+        // Where the detail-bar currently is (with margin=0)
+        var detailBar = panel.querySelector('.detail-bar');
+        var barRect = detailBar ? detailBar.getBoundingClientRect() : panel.getBoundingClientRect();
+        var barTop = barRect.top - layoutRect.top;
+
+        // Shift the panel so the bar top aligns with the section top
+        var desiredMargin = sectionTop - barTop;
+        desiredMargin = Math.max(0, desiredMargin);
+
+        panel.style.marginTop = desiredMargin + 'px';
     }
 
     function drawConnector() {
