@@ -185,6 +185,138 @@
         return panel;
     }
 
+    // ── Search ──
+
+    var searchIndex = []; // { type: 'section'|'symbol', name, section, address, sourceLine, colorIndex, sectionBlock }
+
+    function buildSearchBox(layout) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'search-wrapper';
+
+        var input = document.createElement('input');
+        input.className = 'search-input';
+        input.type = 'text';
+        input.placeholder = 'Search symbols and sections\u2026';
+        wrapper.appendChild(input);
+
+        var results = document.createElement('div');
+        results.className = 'search-results';
+        wrapper.appendChild(results);
+
+        var debounceTimer = null;
+        input.addEventListener('input', function () {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function () {
+                doSearch(input.value, results);
+            }, 150);
+        });
+
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                input.value = '';
+                results.innerHTML = '';
+                results.classList.remove('visible');
+            }
+        });
+
+        // Close results when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!wrapper.contains(e.target)) {
+                results.innerHTML = '';
+                results.classList.remove('visible');
+            }
+        });
+
+        return wrapper;
+    }
+
+    function doSearch(query, resultsEl) {
+        resultsEl.innerHTML = '';
+        if (!query || query.length < 2) {
+            resultsEl.classList.remove('visible');
+            return;
+        }
+
+        var q = query.toLowerCase();
+        var matches = [];
+        var limit = 50;
+
+        for (var i = 0; i < searchIndex.length && matches.length < limit; i++) {
+            var entry = searchIndex[i];
+            if (entry.name.toLowerCase().indexOf(q) >= 0) {
+                matches.push(entry);
+            }
+        }
+
+        if (matches.length === 0) {
+            var noResult = document.createElement('div');
+            noResult.className = 'search-result-item search-no-result';
+            noResult.textContent = 'No matches found';
+            resultsEl.appendChild(noResult);
+            resultsEl.classList.add('visible');
+            return;
+        }
+
+        for (var m = 0; m < matches.length; m++) {
+            var match = matches[m];
+            var item = document.createElement('div');
+            item.className = 'search-result-item';
+
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'search-result-name';
+            nameSpan.textContent = match.name;
+            item.appendChild(nameSpan);
+
+            var meta = document.createElement('span');
+            meta.className = 'search-result-meta';
+            if (match.type === 'section') {
+                meta.textContent = 'section';
+            } else {
+                meta.textContent = match.section + '  ' + formatSize(match.size);
+            }
+            item.appendChild(meta);
+
+            (function (entry) {
+                item.addEventListener('click', function () {
+                    resultsEl.innerHTML = '';
+                    resultsEl.classList.remove('visible');
+                    if (entry.type === 'section') {
+                        // Click the section block to open it
+                        if (entry.sectionBlock) {
+                            entry.sectionBlock.click();
+                            entry.sectionBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    } else {
+                        // Open the section detail, then highlight the symbol
+                        if (entry.sectionBlock) {
+                            entry.sectionBlock.click();
+                            entry.sectionBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                        // After detail panel renders, highlight the symbol row
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () {
+                                var el;
+                                if (entry.address !== undefined) {
+                                    el = detailSymbolIndex[entry.section + '\0' + String(entry.address)];
+                                }
+                                if (!el) {
+                                    el = detailSymbolIndex[entry.section + '\0' + entry.name];
+                                }
+                                if (el) {
+                                    el.classList.add('highlighted');
+                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                            });
+                        });
+                    }
+                });
+            })(match);
+
+            resultsEl.appendChild(item);
+        }
+        resultsEl.classList.add('visible');
+    }
+
     // ── Render ──
 
     function render(layout) {
@@ -207,6 +339,9 @@
 
         // ── Stats panel ──
         fragment.appendChild(buildStatsPanel(layout));
+
+        // ── Search box ──
+        fragment.appendChild(buildSearchBox(layout));
 
         var container = document.createElement('div');
         container.className = 'memory-container';
@@ -309,6 +444,43 @@
         fragment.appendChild(container);
         app.innerHTML = '';
         app.appendChild(fragment);
+
+        // ── Build search index ──
+        searchIndex = [];
+        for (var si = 0; si < layout.regions.length; si++) {
+            var reg = layout.regions[si];
+            for (var sj = 0; sj < reg.sections.length; sj++) {
+                var sec = reg.sections[sj];
+                var secBlocks = sectionIndex[sec.name];
+                var secBlock = secBlocks ? secBlocks[0] : null;
+                var cIdx = secBlock ? Number(secBlock.getAttribute('data-color-index')) : 0;
+                searchIndex.push({
+                    type: 'section',
+                    name: sec.name,
+                    section: sec.name,
+                    address: sec.address,
+                    size: sec.size,
+                    sourceLine: sec.sourceLine,
+                    colorIndex: cIdx,
+                    sectionBlock: secBlock,
+                });
+                for (var sk = 0; sk < (sec.symbols || []).length; sk++) {
+                    var sym = sec.symbols[sk];
+                    if (sym.size > 0) {
+                        searchIndex.push({
+                            type: 'symbol',
+                            name: sym.name,
+                            section: sec.name,
+                            address: sym.address,
+                            size: sym.size,
+                            sourceLine: sym.sourceLine,
+                            colorIndex: cIdx,
+                            sectionBlock: secBlock,
+                        });
+                    }
+                }
+            }
+        }
 
         // ── Event delegation ──
         container.addEventListener('click', function (e) {
