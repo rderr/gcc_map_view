@@ -103,7 +103,7 @@ h1 {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: 28px;
+    min-height: 44px;
     border-bottom: 1px solid rgba(0,0,0,0.3);
 }
 
@@ -126,10 +126,10 @@ h1 {
 }
 
 .section-label {
-    font-size: 0.82em;
+    font-size: 1em;
     font-weight: 600;
     color: #fff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    text-shadow: 0 1px 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -138,10 +138,10 @@ h1 {
 }
 
 .section-info {
-    font-size: 0.7em;
+    font-size: 0.85em;
     font-family: var(--vscode-editor-font-family, monospace);
-    color: rgba(255,255,255,0.6);
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8);
     padding: 0 8px 2px;
     pointer-events: none;
     white-space: nowrap;
@@ -173,7 +173,7 @@ h1 {
     height: 6px;
     background: #222;
     border-radius: 3px;
-    margin-top: 6px;
+    margin-bottom: 6px;
     overflow: hidden;
 }
 
@@ -195,14 +195,45 @@ h1 {
 
 .detail-header-title {
     font-weight: 600;
-    font-size: 1.05em;
+    font-size: 1.2em;
     margin-bottom: 2px;
 }
 
 .detail-header-info {
-    font-size: 0.82em;
+    font-size: 1em;
     color: var(--vscode-descriptionForeground, #888);
     line-height: 1.5;
+}
+
+.detail-sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.detail-sort-label {
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground, #888);
+}
+
+.detail-sort-btn {
+    font-size: 0.85em;
+    padding: 2px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--vscode-foreground, #ccc);
+    background: rgba(255,255,255,0.06);
+    transition: background 0.15s;
+}
+
+.detail-sort-btn:hover {
+    background: rgba(255,255,255,0.12);
+}
+
+.detail-sort-btn.active {
+    background: rgba(255,255,255,0.18);
+    font-weight: 600;
 }
 
 .detail-bar {
@@ -219,7 +250,7 @@ h1 {
     cursor: pointer;
     border-bottom: 1px solid rgba(0,0,0,0.3);
     transition: filter 0.15s;
-    min-height: 22px;
+    min-height: 40px;
     position: relative;
 }
 
@@ -234,11 +265,31 @@ h1 {
     z-index: 1;
 }
 
-.detail-row-name {
-    font-size: 0.8em;
-    font-weight: 500;
+.detail-row-top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.detail-row-src-btn {
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 1em;
+    color: rgba(255,255,255,0.5);
+    padding: 0 6px;
+    pointer-events: auto;
+    transition: color 0.15s;
+}
+
+.detail-row-src-btn:hover {
     color: #fff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+.detail-row-name {
+    font-size: 1em;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -246,10 +297,10 @@ h1 {
 }
 
 .detail-row-info {
-    font-size: 0.68em;
+    font-size: 0.85em;
     font-family: var(--vscode-editor-font-family, monospace);
-    color: rgba(255,255,255,0.55);
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8);
     padding: 0 8px 1px;
     white-space: nowrap;
     overflow: hidden;

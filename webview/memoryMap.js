@@ -1,5 +1,5 @@
 (function () {
-    const MIN_SECTION_HEIGHT = 28;
+    const MIN_SECTION_HEIGHT = 44;
     const REGION_BAR_HEIGHT = 700;
     const SECTION_COLORS = [
         '#4477AA', '#66CCEE', '#228833', '#CCBB44', '#EE6677', '#AA3377',
@@ -153,8 +153,6 @@
                 bar.appendChild(freeBlock);
             }
 
-            col.appendChild(bar);
-
             var usageBarContainer = document.createElement('div');
             usageBarContainer.className = 'usage-bar-container';
             var usageBarFill = document.createElement('div');
@@ -163,6 +161,8 @@
             usageBarFill.style.width = pct + '%';
             usageBarContainer.appendChild(usageBarFill);
             col.appendChild(usageBarContainer);
+
+            col.appendChild(bar);
 
             container.appendChild(col);
         }
@@ -194,6 +194,12 @@
 
     // ── Detail panel ──
 
+    // Current sort state
+    var currentSort = 'address'; // 'address' | 'size' | 'name'
+    var currentSortAsc = true;   // true = ascending, false = descending
+    // Stashed data for re-sorting without re-clicking
+    var currentDetailSection = null;
+
     function showDetail(section, colorIndex, sectionBlock) {
         var panel = document.getElementById('detail-panel');
         if (!panel) { return; }
@@ -207,10 +213,36 @@
             sectionBlock.classList.add('selected');
         }
 
+        currentDetailSection = section;
+        renderDetailPanel(section, colorIndex);
+
+        panel.classList.add('visible');
+
+        var svg = document.getElementById('connector-svg');
+        if (svg) { svg.classList.add('visible'); }
+    }
+
+    function sortSymbols(symbols, mode, asc) {
+        var sorted = symbols.slice();
+        var dir = asc ? 1 : -1;
+        if (mode === 'size') {
+            sorted.sort(function (a, b) { return (a.size - b.size) * dir; });
+        } else if (mode === 'name') {
+            sorted.sort(function (a, b) { return a.name.localeCompare(b.name) * dir; });
+        } else {
+            sorted.sort(function (a, b) { return ((a.address || 0) - (b.address || 0)) * dir; });
+        }
+        return sorted;
+    }
+
+    function renderDetailPanel(section, colorIndex) {
+        var panel = document.getElementById('detail-panel');
+        if (!panel) { return; }
+
         detailSymbolIndex = {};
 
         var symbols = (section.symbols || []).filter(function (s) { return s.size > 0; });
-        symbols.sort(function (a, b) { return (a.address || 0) - (b.address || 0); });
+        symbols = sortSymbols(symbols, currentSort, currentSortAsc);
 
         var baseColor = SECTION_COLORS[colorIndex % SECTION_COLORS.length];
 
@@ -229,16 +261,65 @@
         infoDiv.textContent = formatHex(section.address) + ' \u2502 ' + symbols.length + ' symbols';
         headerDiv.appendChild(infoDiv);
 
-        // Symbol bar — tall enough to list every symbol
+        // Sort buttons
+        var sortBar = document.createElement('div');
+        sortBar.className = 'detail-sort-bar';
+
+        var sortLabel = document.createElement('span');
+        sortLabel.className = 'detail-sort-label';
+        sortLabel.textContent = 'Sort:';
+        sortBar.appendChild(sortLabel);
+
+        var sorts = [
+            { key: 'address', label: 'Address' },
+            { key: 'size', label: 'Size' },
+            { key: 'name', label: 'Name' },
+        ];
+        for (var si = 0; si < sorts.length; si++) {
+            var isActive = currentSort === sorts[si].key;
+            var arrow = isActive ? (currentSortAsc ? ' \u25B2' : ' \u25BC') : '';
+            var btn = document.createElement('span');
+            btn.className = 'detail-sort-btn' + (isActive ? ' active' : '');
+            btn.textContent = sorts[si].label + arrow;
+            btn.setAttribute('data-sort', sorts[si].key);
+            sortBar.appendChild(btn);
+        }
+
+        sortBar.addEventListener('click', function (e) {
+            var sortBtn = e.target.closest('.detail-sort-btn');
+            if (sortBtn) {
+                var newSort = sortBtn.getAttribute('data-sort');
+                if (newSort === currentSort) {
+                    currentSortAsc = !currentSortAsc;
+                } else {
+                    currentSort = newSort;
+                    currentSortAsc = true;
+                }
+                renderDetailPanel(currentDetailSection, currentSelectedColorIdx);
+                requestAnimationFrame(function () {
+                    requestAnimationFrame(function () {
+                        positionDetailPanel();
+                        drawConnector();
+                    });
+                });
+            }
+        });
+
+        headerDiv.appendChild(sortBar);
+
+        // Symbol bar
         var detailBar = document.createElement('div');
         detailBar.className = 'detail-bar';
 
         var totalSymSize = symbols.reduce(function (s, sym) { return s + sym.size; }, 0);
-        var MIN_ROW = 32;
+        var MIN_ROW = 40;
+        var totalHeight = Math.max(symbols.length * MIN_ROW, 600);
 
         for (var i = 0; i < symbols.length; i++) {
             var sym = symbols[i];
-            var rowHeight = MIN_ROW;
+            var rowHeight = totalSymSize > 0
+                ? Math.max(MIN_ROW, (sym.size / totalSymSize) * totalHeight)
+                : MIN_ROW;
 
             var row = document.createElement('div');
             row.className = 'detail-row';
@@ -254,14 +335,29 @@
                 : section.name + '\0' + sym.name;
             detailSymbolIndex[symKey] = row;
 
+            var topLine = document.createElement('div');
+            topLine.className = 'detail-row-top';
+
             var nameSpan = document.createElement('span');
             nameSpan.className = 'detail-row-name';
             nameSpan.textContent = sym.name;
-            row.appendChild(nameSpan);
+            topLine.appendChild(nameSpan);
+
+            var srcBtn = document.createElement('span');
+            srcBtn.className = 'detail-row-src-btn';
+            srcBtn.textContent = '\u21b1';
+            srcBtn.title = 'Go to source';
+            srcBtn.setAttribute('data-symbol', sym.name);
+            srcBtn.setAttribute('data-section', section.name);
+            srcBtn.setAttribute('data-address', sym.address !== undefined ? String(sym.address) : '');
+            srcBtn.setAttribute('data-source-line', sym.sourceLine !== undefined ? String(sym.sourceLine) : '');
+            topLine.appendChild(srcBtn);
+
+            row.appendChild(topLine);
 
             var infoSpan = document.createElement('span');
             infoSpan.className = 'detail-row-info';
-            infoSpan.textContent = (sym.address !== undefined ? formatHex(sym.address) : '') + '  ' + formatSize(sym.size);
+            infoSpan.textContent = (sym.address !== undefined ? formatHex(sym.address) : '') + '  ' + formatSize(sym.size) + ' (' + sym.size + ' B / 0x' + sym.size.toString(16).toUpperCase() + ')';
             row.appendChild(infoSpan);
 
             detailBar.appendChild(row);
@@ -277,6 +373,18 @@
         }
 
         detailBar.addEventListener('click', function (e) {
+            var srcBtn = e.target.closest('.detail-row-src-btn');
+            if (srcBtn) {
+                e.stopPropagation();
+                window.mapViewIPC.postMessage({
+                    type: 'selectSymbol',
+                    symbol: srcBtn.getAttribute('data-symbol'),
+                    section: srcBtn.getAttribute('data-section'),
+                    address: srcBtn.getAttribute('data-address') ? Number(srcBtn.getAttribute('data-address')) : undefined,
+                    sourceLine: srcBtn.getAttribute('data-source-line') ? Number(srcBtn.getAttribute('data-source-line')) : undefined,
+                });
+                return;
+            }
             var row = e.target.closest('.detail-row');
             if (row) {
                 window.mapViewIPC.postMessage({
@@ -292,10 +400,6 @@
         panel.innerHTML = '';
         panel.appendChild(headerDiv);
         panel.appendChild(detailBar);
-        panel.classList.add('visible');
-
-        var svg = document.getElementById('connector-svg');
-        if (svg) { svg.classList.add('visible'); }
 
         // Position the detail panel and draw connector after layout settles
         requestAnimationFrame(function () {
