@@ -170,21 +170,11 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
     }
     activeDecorations = [];
 
-    // Pre-create one decoration type per palette color for symbols and sections.
-    // This avoids creating thousands of individual decoration types.
-    const symDecoTypes: vscode.TextEditorDecorationType[] = [];
-    const symDecoRanges: vscode.Range[][] = [];
+    // Pre-create one decoration type per palette color for sections.
     const secDecoTypes: vscode.TextEditorDecorationType[] = [];
     const secDecoRanges: vscode.Range[][] = [];
     for (let c = 0; c < PALETTE.length; c++) {
         const color = PALETTE[c];
-        symDecoTypes.push(vscode.window.createTextEditorDecorationType({
-            backgroundColor: color + '55',
-            isWholeLine: true,
-            overviewRulerColor: color,
-            overviewRulerLane: vscode.OverviewRulerLane.Left,
-        }));
-        symDecoRanges.push([]);
         secDecoTypes.push(vscode.window.createTextEditorDecorationType({
             backgroundColor: color + '55',
             isWholeLine: true,
@@ -193,9 +183,9 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
         }));
         secDecoRanges.push([]);
     }
-    activeDecorations.push(...symDecoTypes, ...secDecoTypes);
+    activeDecorations.push(...secDecoTypes);
 
-    // Collect ranges grouped by color index
+    // Collect ranges grouped by section color index
     let sectionIndex = 0;
     for (const region of layout.regions) {
         if (region.length === 0) { continue; }
@@ -206,41 +196,13 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
             sectionIndex++;
             if (section.sourceLine === undefined || section.sourceLineEnd === undefined) { continue; }
 
-            // Collect symbol lines with their colors (only symbols with size > 0, matching map view)
-            const symbolLineSet = new Set<number>();
-            const symbols = section.symbols || [];
-            let visibleIndex = 0;
-            for (const sym of symbols) {
-                if (sym.size === 0) { continue; }
-                if (sym.sourceLine !== undefined) {
-                    const symColorIdx = visibleIndex % PALETTE.length;
-                    symbolLineSet.add(sym.sourceLine);
-                    symDecoRanges[symColorIdx].push(new vscode.Range(sym.sourceLine, 0, sym.sourceLine, 0));
-                }
-                visibleIndex++;
-            }
-
-            // Section band — build ranges that skip symbol lines
-            let runStart = section.sourceLine;
-            for (let line = section.sourceLine; line <= section.sourceLineEnd; line++) {
-                if (symbolLineSet.has(line)) {
-                    if (line > runStart) {
-                        secDecoRanges[sectionColorIdx].push(new vscode.Range(runStart, 0, line - 1, 0));
-                    }
-                    runStart = line + 1;
-                }
-            }
-            if (runStart <= section.sourceLineEnd) {
-                secDecoRanges[sectionColorIdx].push(new vscode.Range(runStart, 0, section.sourceLineEnd, 0));
-            }
+            // Color the entire section range with the section's color
+            secDecoRanges[sectionColorIdx].push(new vscode.Range(section.sourceLine, 0, section.sourceLineEnd, 0));
         }
     }
 
-    // Apply all decorations in batch (24 calls max instead of thousands)
+    // Apply all decorations in batch
     for (let c = 0; c < PALETTE.length; c++) {
-        if (symDecoRanges[c].length > 0) {
-            editor.setDecorations(symDecoTypes[c], symDecoRanges[c]);
-        }
         if (secDecoRanges[c].length > 0) {
             editor.setDecorations(secDecoTypes[c], secDecoRanges[c]);
         }
