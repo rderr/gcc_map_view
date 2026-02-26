@@ -31,4 +31,6 @@ export interface MemoryLayout {
     regions: MemoryRegion[];
     sections: Section[];        // all sections (including those not assigned to a region)
     sourceFile?: string;
+    discardedSize?: number;     // total bytes from discarded input sections
+    discardedCount?: number;    // number of discarded input sections
 }

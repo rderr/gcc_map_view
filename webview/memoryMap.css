@@ -307,6 +307,61 @@ h1 {
     text-overflow: ellipsis;
 }
 
+/* ── Stats panel ── */
+.stats-panel {
+    margin-bottom: 16px;
+}
+
+.stats-header {
+    font-weight: 600;
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 8px 0;
+    color: var(--vscode-foreground, #ccc);
+    user-select: none;
+}
+
+.stats-header:hover {
+    color: #fff;
+}
+
+.stats-body {
+    padding: 8px 0;
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8px;
+}
+
+.stats-table td {
+    padding: 3px 8px;
+    font-size: 0.95em;
+}
+
+.stats-label {
+    color: var(--vscode-descriptionForeground, #999);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.stats-value {
+    color: var(--vscode-foreground, #ccc);
+    text-align: right;
+    font-family: var(--vscode-editor-font-family, monospace);
+    white-space: nowrap;
+}
+
+.stats-subheader {
+    font-weight: 600;
+    font-size: 0.95em;
+    padding: 8px 0 4px;
+    color: var(--vscode-foreground, #ccc);
+}
+
 /* ── No data ── */
 .no-data {
     text-align: center;

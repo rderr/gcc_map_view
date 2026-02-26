@@ -46,6 +46,145 @@
         return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
     }
 
+    // ── Stats panel ──
+
+    function buildStatsPanel(layout) {
+        var panel = document.createElement('div');
+        panel.className = 'stats-panel';
+
+        var header = document.createElement('div');
+        header.className = 'stats-header';
+        header.textContent = '\u25B6 Statistics';
+        header.addEventListener('click', function () {
+            var body = panel.querySelector('.stats-body');
+            if (!body) { return; }
+            var collapsed = body.style.display === 'none';
+            body.style.display = collapsed ? '' : 'none';
+            header.textContent = (collapsed ? '\u25BC ' : '\u25B6 ') + 'Statistics';
+        });
+        panel.appendChild(header);
+
+        var body = document.createElement('div');
+        body.className = 'stats-body';
+        body.style.display = 'none';
+
+        // Gather stats
+        var totalFlash = 0, usedFlash = 0;
+        var totalRam = 0, usedRam = 0;
+        var totalSymbols = 0;
+        var allSymbols = [];
+        var codeSections = 0, dataSections = 0;
+        var codeSize = 0, dataSize = 0, bssSize = 0, rodataSize = 0;
+        var sourceFiles = {};
+
+        for (var r = 0; r < layout.regions.length; r++) {
+            var region = layout.regions[r];
+            var attr = (region.attributes || '').toLowerCase();
+            // Classify: regions with 'x' (execute) or 'r' only are flash-like; 'w' without 'x' is RAM-like
+            var isRam = attr.indexOf('w') >= 0 && attr.indexOf('x') < 0;
+            if (isRam) {
+                totalRam += region.length;
+                usedRam += region.used || 0;
+            } else {
+                totalFlash += region.length;
+                usedFlash += region.used || 0;
+            }
+
+            for (var s = 0; s < region.sections.length; s++) {
+                var sec = region.sections[s];
+                var secName = sec.name.toLowerCase();
+
+                if (secName.indexOf('.text') >= 0) { codeSize += sec.size; codeSections++; }
+                else if (secName.indexOf('.rodata') >= 0) { rodataSize += sec.size; }
+                else if (secName.indexOf('.bss') >= 0) { bssSize += sec.size; dataSections++; }
+                else if (secName.indexOf('.data') >= 0) { dataSize += sec.size; dataSections++; }
+
+                for (var si = 0; si < (sec.symbols || []).length; si++) {
+                    var sym = sec.symbols[si];
+                    if (sym.size > 0) {
+                        totalSymbols++;
+                        allSymbols.push(sym);
+                        if (sym.sourceFile) { sourceFiles[sym.sourceFile] = true; }
+                    }
+                }
+            }
+        }
+
+        // Sort for top 10
+        allSymbols.sort(function (a, b) { return b.size - a.size; });
+        var top10 = allSymbols.slice(0, 10);
+
+        var rows = [];
+
+        // Region usage
+        if (totalFlash > 0) {
+            rows.push(['Flash/ROM', formatSize(usedFlash) + ' / ' + formatSize(totalFlash) + ' (' + (usedFlash / totalFlash * 100).toFixed(1) + '%)']);
+        }
+        if (totalRam > 0) {
+            rows.push(['RAM', formatSize(usedRam) + ' / ' + formatSize(totalRam) + ' (' + (usedRam / totalRam * 100).toFixed(1) + '%)']);
+        }
+
+        // Breakdown
+        if (codeSize > 0) { rows.push(['Code (.text)', formatSize(codeSize)]); }
+        if (rodataSize > 0) { rows.push(['Read-only data (.rodata)', formatSize(rodataSize)]); }
+        if (dataSize > 0) { rows.push(['Initialized data (.data)', formatSize(dataSize)]); }
+        if (bssSize > 0) { rows.push(['Zero-init data (.bss)', formatSize(bssSize)]); }
+
+        rows.push(['Total symbols', String(totalSymbols)]);
+        rows.push(['Source files', String(Object.keys(sourceFiles).length)]);
+
+        // Discarded
+        if (layout.discardedSize > 0) {
+            rows.push(['Discarded sections', formatSize(layout.discardedSize) + ' (' + layout.discardedCount + ' sections)']);
+        }
+
+        // Build table
+        var table = document.createElement('table');
+        table.className = 'stats-table';
+        for (var ri = 0; ri < rows.length; ri++) {
+            var tr = document.createElement('tr');
+            var td1 = document.createElement('td');
+            td1.className = 'stats-label';
+            td1.textContent = rows[ri][0];
+            var td2 = document.createElement('td');
+            td2.className = 'stats-value';
+            td2.textContent = rows[ri][1];
+            tr.appendChild(td1);
+            tr.appendChild(td2);
+            table.appendChild(tr);
+        }
+        body.appendChild(table);
+
+        // Top 10 largest symbols
+        if (top10.length > 0) {
+            var topHeader = document.createElement('div');
+            topHeader.className = 'stats-subheader';
+            topHeader.textContent = 'Top 10 largest symbols';
+            body.appendChild(topHeader);
+
+            var topTable = document.createElement('table');
+            topTable.className = 'stats-table';
+            for (var ti = 0; ti < top10.length; ti++) {
+                var sym = top10[ti];
+                var tr = document.createElement('tr');
+                var tdName = document.createElement('td');
+                tdName.className = 'stats-label';
+                tdName.textContent = sym.name;
+                tdName.title = sym.sourceFile || '';
+                var tdSize = document.createElement('td');
+                tdSize.className = 'stats-value';
+                tdSize.textContent = formatSize(sym.size);
+                tr.appendChild(tdName);
+                tr.appendChild(tdSize);
+                topTable.appendChild(tr);
+            }
+            body.appendChild(topTable);
+        }
+
+        panel.appendChild(body);
+        return panel;
+    }
+
     // ── Render ──
 
     function render(layout) {
@@ -65,6 +204,9 @@
         }
 
         var fragment = document.createDocumentFragment();
+
+        // ── Stats panel ──
+        fragment.appendChild(buildStatsPanel(layout));
 
         var container = document.createElement('div');
         container.className = 'memory-container';

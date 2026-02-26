@@ -4,6 +4,7 @@ const enum State {
     SCANNING,
     MEMORY_CONFIG_HEADER,
     MEMORY_CONFIG,
+    DISCARDED_SECTIONS,
     LINKER_MAP_SECTIONS,
 }
 
@@ -16,6 +17,8 @@ export function isGccMapFile(text: string): boolean {
 export function parseMap(text: string): MemoryLayout {
     const regions: MemoryRegion[] = [];
     const sections: Section[] = [];
+    let discardedSize = 0;
+    let discardedCount = 0;
 
     let state: State = State.SCANNING;
     let currentSection: Section | undefined;
@@ -32,6 +35,8 @@ export function parseMap(text: string): MemoryLayout {
             case State.SCANNING: {
                 if (/^Memory Configuration\s*$/.test(trimmed)) {
                     state = State.MEMORY_CONFIG_HEADER;
+                } else if (/^Discarded input sections\s*$/i.test(trimmed)) {
+                    state = State.DISCARDED_SECTIONS;
                 } else if (/^Linker script and memory map\s*$/i.test(trimmed)) {
                     state = State.LINKER_MAP_SECTIONS;
                 }
@@ -72,6 +77,26 @@ export function parseMap(text: string): MemoryLayout {
                         sections: [],
                         used: 0,
                     });
+                }
+                break;
+            }
+
+            case State.DISCARDED_SECTIONS: {
+                if (/^Memory Configuration\s*$/.test(trimmed)) {
+                    state = State.MEMORY_CONFIG_HEADER;
+                    break;
+                }
+                if (/^Linker script and memory map\s*$/i.test(trimmed)) {
+                    state = State.LINKER_MAP_SECTIONS;
+                    break;
+                }
+                // Parse discarded section lines: " .text  0x00000000  0x1a  file.o"
+                const discardMatch = trimmed.match(
+                    /^\S+\s+0x[0-9a-fA-F]+\s+(0x[0-9a-fA-F]+)/
+                );
+                if (discardMatch) {
+                    discardedSize += parseInt(discardMatch[1], 16);
+                    discardedCount++;
                 }
                 break;
             }
@@ -232,5 +257,5 @@ export function parseMap(text: string): MemoryLayout {
         }
     }
 
-    return { regions, sections };
+    return { regions, sections, discardedSize, discardedCount };
 }
