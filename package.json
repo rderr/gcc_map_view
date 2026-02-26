@@ -1,7 +1,7 @@
 {
   "name": "gcc-map-view",
   "displayName": "GCC Map View",
-  "description": "Visualize GCC linker map files (.map) and linker scripts (.ld) with a tree view and graphical memory map",
+  "description": "Visualize GCC linker map files (.map) and linker scripts (.ld) with a graphical memory map",
   "version": "0.2.1",
   "license": "MIT",
   "author": "Rob Derr <robjderr@gmail.com>",
@@ -37,7 +37,6 @@
   ],
   "activationEvents": [
     "onLanguage:linkerscript",
-    "onView:memoryMapTree",
     "workspaceContains:**/*.ld",
     "workspaceContains:**/*.map",
     "onStartupFinished"
@@ -58,23 +57,6 @@
         "configuration": "./language-configuration.json"
       }
     ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "gccMapView",
-          "title": "GCC Memory Map",
-          "icon": "resources/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "gccMapView": [
-        {
-          "id": "memoryMapTree",
-          "name": "Memory Layout"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "gccMapView.showMemoryMap",
@@ -85,112 +67,20 @@
         "command": "gccMapView.refresh",
         "title": "Refresh Memory Map",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "gccMapView.openFile",
-        "title": "Open Linker Script or Map File",
-        "icon": "$(file)"
-      },
-      {
-        "command": "gccMapView.openSymbolSource",
-        "title": "Open Source File",
-        "icon": "$(go-to-file)"
-      },
-      {
-        "command": "gccMapView.search",
-        "title": "Search Symbols",
-        "icon": "$(search)"
-      },
-      {
-        "command": "gccMapView.clearSearch",
-        "title": "Clear Search",
-        "icon": "$(clear-all)"
       }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "gccMapView.showMemoryMap",
-          "when": "view == memoryMapTree",
-          "group": "navigation"
-        },
-        {
-          "command": "gccMapView.refresh",
-          "when": "view == memoryMapTree",
-          "group": "navigation"
-        },
-        {
-          "command": "gccMapView.openFile",
-          "when": "view == memoryMapTree",
-          "group": "navigation"
-        },
-        {
-          "command": "gccMapView.search",
-          "when": "view == memoryMapTree",
-          "group": "navigation"
-        },
-        {
-          "command": "gccMapView.clearSearch",
-          "when": "view == memoryMapTree && gccMapView.filterActive",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "gccMapView.openSymbolSource",
-          "when": "view == memoryMapTree && viewItem == symbol",
-          "group": "inline"
-        },
-        {
-          "command": "gccMapView.openSymbolSource",
-          "when": "view == memoryMapTree && viewItem == symbol",
-          "group": "navigation"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
-    "publish": "vsce publish",
-    "compile:electron": "tsc -p tsconfig.electron.json",
-    "watch:electron": "tsc -watch -p tsconfig.electron.json",
-    "start:electron": "npm run compile:electron && electron out-electron/electron/main.js",
-    "dist:electron": "npm run compile:electron && electron-builder"
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
     "typescript": "^5.3.0"
-  },
-  "build": {
-    "appId": "com.robderr.gcc-map-view",
-    "productName": "GCC Map View",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "out-electron/**/*",
-      "webview/**/*",
-      "!webview/ipc-vscode.js",
-      "package.json"
-    ],
-    "extraMetadata": {
-      "main": "out-electron/electron/main.js"
-    },
-    "win": {
-      "target": "nsis"
-    },
-    "mac": {
-      "target": "dmg"
-    },
-    "linux": {
-      "target": "AppImage"
-    }
   }
 }

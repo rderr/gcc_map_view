@@ -2,13 +2,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { parseLd } from './parsers/ldParser';
 import { parseMap, isGccMapFile } from './parsers/mapParser';
-import { MemoryTreeProvider } from './providers/memoryTreeProvider';
 import { MemoryMapPanel } from './providers/memoryMapPanel';
-import { SectionTreeItem, SymbolTreeItem } from './providers/memoryTreeItems';
 import { MemoryLayout } from './models/types';
 
-let treeProvider: MemoryTreeProvider;
-let treeView: vscode.TreeView<any>;
+// Current parsed layout
+let currentLayout: MemoryLayout | undefined;
 
 // 12-color colorblind-safe palette (Paul Tol qualitative scheme)
 const PALETTE = [
@@ -25,136 +23,37 @@ let lastParsedVersion: number | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('GCC Map View: activating');
-    treeProvider = new MemoryTreeProvider();
-
-    treeView = vscode.window.createTreeView('memoryMapTree', {
-        treeDataProvider: treeProvider,
-        showCollapseAll: true,
-    });
 
     // Command: Show Memory Map webview
     context.subscriptions.push(
         vscode.commands.registerCommand('gccMapView.showMemoryMap', () => {
-            const layout = treeProvider.getLayout();
-            if (!layout) {
+            if (!currentLayout) {
                 vscode.window.showWarningMessage('No memory layout data. Open a .ld or .map file first.');
                 return;
             }
 
-            const panel = MemoryMapPanel.createOrShow(context.extensionUri.fsPath);
-            panel.updateLayout(layout);
-
-            // Webview -> tree + navigate: click section in webview reveals in tree and jumps in editor
-            panel.setOnSectionSelected((sectionName, sourceLine) => {
-                const item = treeProvider.findSectionItem(sectionName);
-                if (item) {
-                    treeView.reveal(item, { select: true, focus: false });
-                }
-                const address = item?.section.address;
-                if (address !== undefined) {
-                    goToAddress(address, sectionName);
-                } else {
-                    goToLine(sourceLine ?? item?.section.sourceLine);
-                }
-            });
-
-            // Webview -> tree: click symbol in webview reveals in tree and jumps in editor
-            panel.setOnSymbolSelected((symbolName, sectionName, address, sourceLine) => {
-                const item = treeProvider.findSymbolItem(symbolName, sectionName, address);
-                if (item) {
-                    treeView.reveal(item, { select: true, focus: false, expand: true });
-                }
-                // Use the symbol's address to find the exact line in the map file
-                const symAddr = address ?? item?.symbol.address;
-                if (symAddr !== undefined) {
-                    goToAddress(symAddr, symbolName);
-                } else {
-                    goToLine(sourceLine ?? item?.symbol.sourceLine);
-                }
-            });
+            showMemoryMap(context, currentLayout);
         })
     );
 
     // Command: Refresh
     context.subscriptions.push(
         vscode.commands.registerCommand('gccMapView.refresh', () => {
+            // Clear cache to force re-parse
+            lastParsedUri = undefined;
+            lastParsedVersion = undefined;
             const editor = vscode.window.activeTextEditor;
             if (editor) {
-                parseDocument(editor.document);
+                parseDocument(context, editor.document);
             }
         })
     );
 
-    // Command: Open file
-    context.subscriptions.push(
-        vscode.commands.registerCommand('gccMapView.openFile', async () => {
-            const uris = await vscode.window.showOpenDialog({
-                canSelectMany: false,
-                filters: {
-                    'Linker Files': ['ld', 'lds', 'map'],
-                },
-            });
-            if (uris && uris.length > 0) {
-                const doc = await vscode.workspace.openTextDocument(uris[0]);
-                await vscode.window.showTextDocument(doc);
-            }
-        })
-    );
-
-    // Command: selectItem — handles single-clicks on section/symbol tree items
-    context.subscriptions.push(
-        vscode.commands.registerCommand('gccMapView.selectItem', (item: SectionTreeItem | SymbolTreeItem) => {
-            const panel = MemoryMapPanel.getCurrent();
-            if (item instanceof SectionTreeItem) {
-                if (panel) {
-                    panel.highlightSection(item.section.name);
-                }
-                goToAddress(item.section.address, item.section.name);
-            } else if (item instanceof SymbolTreeItem) {
-                if (panel && item.symbol.section) {
-                    panel.highlightSymbol(item.symbol.name, item.symbol.section, item.symbol.address);
-                }
-                goToAddress(item.symbol.address, item.symbol.name);
-            }
-        })
-    );
-
-    // Command: openSymbolSource — handles double-clicks on symbol tree items
-    context.subscriptions.push(
-        vscode.commands.registerCommand('gccMapView.openSymbolSource', async (item: SymbolTreeItem) => {
-            if (!(item instanceof SymbolTreeItem)) { return; }
-            await goToSymbolSource(item.symbol.name, item.symbol.sourceFile);
-        })
-    );
-
-    // Command: Search/filter symbols
-    context.subscriptions.push(
-        vscode.commands.registerCommand('gccMapView.search', async () => {
-            const value = await vscode.window.showInputBox({
-                prompt: 'Filter symbols by name',
-                placeHolder: 'Symbol name...',
-                value: treeProvider.getFilter() ?? '',
-            });
-            if (value !== undefined) {
-                treeProvider.setFilter(value || undefined);
-                vscode.commands.executeCommand('setContext', 'gccMapView.filterActive', !!value);
-            }
-        })
-    );
-
-    // Command: Clear search filter
-    context.subscriptions.push(
-        vscode.commands.registerCommand('gccMapView.clearSearch', () => {
-            treeProvider.setFilter(undefined);
-            vscode.commands.executeCommand('setContext', 'gccMapView.filterActive', false);
-        })
-    );
-
-    // Parse on active editor change
+    // Parse on active editor change — auto-open map panel for GCC map files
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor((editor) => {
             if (editor) {
-                parseDocument(editor.document);
+                parseDocument(context, editor.document);
             }
         })
     );
@@ -162,19 +61,51 @@ export function activate(context: vscode.ExtensionContext) {
     // Parse on file save
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument((doc) => {
-            parseDocument(doc);
+            parseDocument(context, doc);
         })
     );
 
     // Parse the currently active document on startup
     if (vscode.window.activeTextEditor) {
-        parseDocument(vscode.window.activeTextEditor.document);
+        parseDocument(context, vscode.window.activeTextEditor.document);
     }
-
-    context.subscriptions.push(treeView);
 }
 
-function parseDocument(document: vscode.TextDocument): void {
+function showMemoryMap(context: vscode.ExtensionContext, layout: MemoryLayout): void {
+    const panel = MemoryMapPanel.createOrShow(context.extensionUri.fsPath);
+    panel.updateLayout(layout);
+
+    // Webview click → navigate in editor
+    panel.setOnSectionSelected((_sectionName, sourceLine) => {
+        const section = findSection(_sectionName);
+        const address = section?.address;
+        if (address !== undefined) {
+            goToAddress(address, _sectionName);
+        } else {
+            goToLine(sourceLine ?? section?.sourceLine);
+        }
+    });
+
+    panel.setOnSymbolSelected((symbolName, _sectionName, address, sourceLine) => {
+        if (address !== undefined) {
+            goToAddress(address, symbolName);
+        } else {
+            goToLine(sourceLine);
+        }
+    });
+}
+
+function findSection(sectionName: string) {
+    if (!currentLayout) { return undefined; }
+    for (const region of currentLayout.regions) {
+        for (const section of region.sections) {
+            if (section.name === sectionName) { return section; }
+        }
+    }
+    return undefined;
+}
+
+function parseDocument(context: vscode.ExtensionContext, document: vscode.TextDocument): void {
     const filePath = document.fileName;
     const ext = path.extname(filePath).toLowerCase();
 
@@ -205,7 +136,7 @@ function parseDocument(document: vscode.TextDocument): void {
     lastParsedUri = docUri;
     lastParsedVersion = document.version;
 
-    treeProvider.setLayout(layout);
+    currentLayout = layout;
 
     // Apply editor decorations for .map files
     if (ext === '.map' && layout) {
@@ -215,10 +146,15 @@ function parseDocument(document: vscode.TextDocument): void {
         }
     }
 
-    // Update webview if open
-    const panel = MemoryMapPanel.getCurrent();
-    if (panel && layout) {
-        panel.updateLayout(layout);
+    // Auto-open or update the Memory Map panel
+    if (layout) {
+        if (MemoryMapPanel.getCurrent()) {
+            // Panel already open — just update it
+            MemoryMapPanel.getCurrent()!.updateLayout(layout);
+        } else {
+            // Auto-open panel for map/ld files
+            showMemoryMap(context, layout);
+        }
     }
 }
 
@@ -307,12 +243,11 @@ function applyDecorations(editor: vscode.TextEditor, layout: MemoryLayout): void
 }
 
 async function goToLine(sourceLine: number | undefined): Promise<void> {
-    const layout = treeProvider.getLayout();
-    if (sourceLine === undefined || !layout?.sourceFile) {
+    if (sourceLine === undefined || !currentLayout?.sourceFile) {
         return;
     }
 
-    const uri = vscode.Uri.file(layout.sourceFile);
+    const uri = vscode.Uri.file(currentLayout.sourceFile);
     const doc = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(doc, {
         viewColumn: vscode.ViewColumn.One,
@@ -326,31 +261,23 @@ async function goToLine(sourceLine: number | undefined): Promise<void> {
 
 /**
  * Navigate to a symbol in the map file by searching for its hex address.
- * This is more reliable than using stored line numbers because it finds the
- * actual line containing the address string in the current file content.
  */
 async function goToAddress(address: number, symbolName?: string): Promise<void> {
-    const layout = treeProvider.getLayout();
-    if (!layout?.sourceFile) { return; }
+    if (!currentLayout?.sourceFile) { return; }
 
-    const uri = vscode.Uri.file(layout.sourceFile);
+    const uri = vscode.Uri.file(currentLayout.sourceFile);
     const doc = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(doc, {
         viewColumn: vscode.ViewColumn.One,
         preserveFocus: false,
     });
 
-    // Format address as it appears in the map file.
-    // GCC map files use "0x" prefix with varying zero-padding (e.g. "0x40080000" or "0x00000100").
-    // Try both the 8-digit padded and the minimal (no leading zeros) forms.
     const hexRaw = address.toString(16);
     const hexPadded = '0x' + hexRaw.padStart(8, '0');
     const hexMinimal = '0x' + hexRaw;
     const text = doc.getText();
     const lines = text.split('\n');
 
-    // Search for the line containing both the address and (optionally) the symbol name.
-    // Prefer an exact match (address + symbol name on the same line).
     let bestLine = -1;
     for (let i = 0; i < lines.length; i++) {
         const ln = lines[i];
@@ -359,7 +286,6 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
             bestLine = i;
             break;
         }
-        // First line with just the address as fallback
         if (bestLine === -1) {
             bestLine = i;
         }
@@ -370,93 +296,6 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
         editor.selection = new vscode.Selection(bestLine, 0, bestLine, 0);
         editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
     }
-}
-
-/**
- * Extract a bare symbol name from a map-file symbol like ".text.myFunc" → "myFunc".
- */
-function extractBareName(symName: string): string {
-    // Strip leading section prefixes: .text., .bss., .data., .rodata., .literal., etc.
-    const m = symName.match(/^\.[a-zA-Z_]+\.(.+)$/);
-    return m ? m[1] : symName;
-}
-
-/**
- * Extract a source filename from the map-file object reference.
- * Examples:
- *   "esp-idf/LED_test/libtest.a(test_led.c.obj)" → "test_led.c"
- *   "CMakeFiles/hub.elf.dir/main.c.obj"           → "main.c"
- *   "C:/path/to/libpp.a(pp.o)"                    → "pp.c" (guess .c from .o)
- */
-function extractSourceName(objRef: string): string | undefined {
-    if (!objRef) { return undefined; }
-
-    // Archive member: lib.a(file.c.obj) or lib.a(file.o)
-    const archiveMatch = objRef.match(/\(([^)]+)\)/);
-    if (archiveMatch) {
-        let name = archiveMatch[1];
-        name = name.replace(/\.obj$/, '').replace(/\.o$/, '');
-        // If it doesn't have an extension, guess .c
-        if (!/\.\w+$/.test(name)) { name += '.c'; }
-        return name;
-    }
-
-    // Direct object file: path/to/file.c.obj
-    const base = objRef.split(/[/\\]/).pop() || objRef;
-    let name = base.replace(/\.obj$/, '').replace(/\.o$/, '');
-    if (!/\.\w+$/.test(name)) { name += '.c'; }
-    return name;
-}
-
-async function goToSymbolSource(symName: string, sourceFile?: string): Promise<void> {
-    const sourceName = sourceFile ? extractSourceName(sourceFile) : undefined;
-    if (!sourceName) {
-        vscode.window.showInformationMessage('No source file information for this symbol.');
-        return;
-    }
-
-    // Search for the source file in the workspace
-    const pattern = `**/${sourceName}`;
-    const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 10);
-
-    if (uris.length === 0) {
-        vscode.window.showInformationMessage(`Could not find "${sourceName}" in the workspace.`);
-        return;
-    }
-
-    // If multiple matches, pick the first (could improve with a picker)
-    const targetUri = uris.length === 1 ? uris[0] : uris[0];
-
-    const doc = await vscode.workspace.openTextDocument(targetUri);
-    const editor = await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preserveFocus: false,
-    });
-
-    // Search for the bare symbol name in the file
-    const bareName = extractBareName(symName);
-    const text = doc.getText();
-    const lines = text.split('\n');
-
-    // Look for a definition-like line: function definition or variable declaration
-    let bestLine = -1;
-    const nameRegex = new RegExp('\\b' + escapeRegex(bareName) + '\\b');
-    for (let i = 0; i < lines.length; i++) {
-        if (nameRegex.test(lines[i])) {
-            bestLine = i;
-            break;
-        }
-    }
-
-    if (bestLine >= 0) {
-        const range = new vscode.Range(bestLine, 0, bestLine, 0);
-        editor.selection = new vscode.Selection(bestLine, 0, bestLine, 0);
-        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
-    }
-}
-
-function escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function deactivate() {}
