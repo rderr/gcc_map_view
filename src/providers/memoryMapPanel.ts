@@ -10,6 +10,7 @@ export class MemoryMapPanel {
     private disposables: vscode.Disposable[] = [];
     private onSectionSelected: ((sectionName: string, sourceLine?: number) => void) | undefined;
     private onSymbolSelected: ((symbolName: string, sectionName: string, address?: number, sourceLine?: number) => void) | undefined;
+    private onGoToSource: ((symbolName: string, sectionName: string, sourceFile?: string, address?: number, sourceLine?: number) => void) | undefined;
 
     private constructor(panel: vscode.WebviewPanel, extensionPath: string) {
         this.panel = panel;
@@ -23,6 +24,8 @@ export class MemoryMapPanel {
                     this.onSectionSelected(message.section, message.sourceLine);
                 } else if (message.type === 'selectSymbol' && this.onSymbolSelected) {
                     this.onSymbolSelected(message.symbol, message.section, message.address, message.sourceLine);
+                } else if (message.type === 'goToSource' && this.onGoToSource) {
+                    this.onGoToSource(message.symbol, message.section, message.sourceFile, message.address, message.sourceLine);
                 }
             },
             null,
@@ -67,6 +70,10 @@ export class MemoryMapPanel {
 
     setOnSymbolSelected(callback: (symbolName: string, sectionName: string, address?: number, sourceLine?: number) => void): void {
         this.onSymbolSelected = callback;
+    }
+
+    setOnGoToSource(callback: (symbolName: string, sectionName: string, sourceFile?: string, address?: number, sourceLine?: number) => void): void {
+        this.onGoToSource = callback;
     }
 
     setTitle(title: string): void {

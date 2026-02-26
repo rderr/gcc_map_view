@@ -656,12 +656,13 @@
 
             var srcBtn = document.createElement('span');
             srcBtn.className = 'detail-row-src-btn';
-            srcBtn.textContent = '\u21b1';
-            srcBtn.title = 'Go to source';
+            srcBtn.textContent = '\u21D7';
+            srcBtn.title = 'Go to source file';
             srcBtn.setAttribute('data-symbol', sym.name);
             srcBtn.setAttribute('data-section', section.name);
             srcBtn.setAttribute('data-address', sym.address !== undefined ? String(sym.address) : '');
             srcBtn.setAttribute('data-source-line', sym.sourceLine !== undefined ? String(sym.sourceLine) : '');
+            srcBtn.setAttribute('data-source-file', sym.sourceFile || '');
             topLine.appendChild(srcBtn);
 
             row.appendChild(topLine);
@@ -688,9 +689,10 @@
             if (srcBtn) {
                 e.stopPropagation();
                 window.mapViewIPC.postMessage({
-                    type: 'selectSymbol',
+                    type: 'goToSource',
                     symbol: srcBtn.getAttribute('data-symbol'),
                     section: srcBtn.getAttribute('data-section'),
+                    sourceFile: srcBtn.getAttribute('data-source-file') || undefined,
                     address: srcBtn.getAttribute('data-address') ? Number(srcBtn.getAttribute('data-address')) : undefined,
                     sourceLine: srcBtn.getAttribute('data-source-line') ? Number(srcBtn.getAttribute('data-source-line')) : undefined,
                 });

@@ -96,6 +96,10 @@ function showMemoryMap(context: vscode.ExtensionContext, layout: MemoryLayout, f
             goToLine(sourceLine);
         }
     });
+
+    panel.setOnGoToSource((symbolName, _sectionName, sourceFile, address, sourceLine) => {
+        goToSourceFile(symbolName, sourceFile, address, sourceLine);
+    });
 }
 
 function findSection(sectionName: string) {
@@ -219,11 +223,9 @@ async function goToLine(sourceLine: number | undefined): Promise<void> {
     const editor = await vscode.window.showTextDocument(doc, {
         viewColumn: vscode.ViewColumn.One,
         preserveFocus: false,
+        selection: new vscode.Range(sourceLine, 0, sourceLine, 0),
     });
-
-    const range = new vscode.Range(sourceLine, 0, sourceLine, 0);
-    editor.selection = new vscode.Selection(sourceLine, 0, sourceLine, 0);
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    editor.revealRange(new vscode.Range(sourceLine, 0, sourceLine, 0), vscode.TextEditorRevealType.InCenter);
 }
 
 /**
@@ -234,10 +236,6 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
 
     const uri = vscode.Uri.file(currentLayout.sourceFile);
     const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc, {
-        viewColumn: vscode.ViewColumn.One,
-        preserveFocus: false,
-    });
 
     const hexRaw = address.toString(16);
     const hexPadded = '0x' + hexRaw.padStart(8, '0');
@@ -248,7 +246,8 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
     let bestLine = -1;
     for (let i = 0; i < lines.length; i++) {
         const ln = lines[i];
-        if (ln.indexOf(hexPadded) === -1 && ln.indexOf(hexMinimal) === -1) { continue; }
+        const lnLower = ln.toLowerCase();
+        if (lnLower.indexOf(hexPadded) === -1 && lnLower.indexOf(hexMinimal) === -1) { continue; }
         if (symbolName && ln.indexOf(symbolName) !== -1) {
             bestLine = i;
             break;
@@ -259,10 +258,142 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
     }
 
     if (bestLine >= 0) {
-        const range = new vscode.Range(bestLine, 0, bestLine, 0);
-        editor.selection = new vscode.Selection(bestLine, 0, bestLine, 0);
-        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        // Use goto-line style navigation: show doc, set selection, then reveal
+        const editor = await vscode.window.showTextDocument(doc, {
+            viewColumn: vscode.ViewColumn.One,
+            preserveFocus: false,
+            selection: new vscode.Range(bestLine, 0, bestLine, 0),
+        });
+        editor.revealRange(new vscode.Range(bestLine, 0, bestLine, 0), vscode.TextEditorRevealType.InCenter);
     }
+}
+
+/**
+ * Extract a source filename from a linker object file reference.
+ * Examples:
+ *   "esp-idf/main/libmain.a(main.c.obj)" → "main.c"
+ *   "CMakeFiles/app.dir/src/main.c.obj"   → "main.c"
+ *   "/path/to/file.o"                      → "file"  (no extension known)
+ *   "lib/libfoo.a(bar.cpp.obj)"            → "bar.cpp"
+ */
+function extractSourceName(objRef: string): string | undefined {
+    if (!objRef) { return undefined; }
+
+    // Pattern: lib.a(file.c.obj) or lib.a(file.cpp.obj)
+    const archiveMatch = objRef.match(/\(([^)]+)\)\s*$/);
+    const inner = archiveMatch ? archiveMatch[1] : objRef;
+
+    // Strip trailing .obj or .o
+    let name = inner.replace(/\.obj$/i, '').replace(/\.o$/i, '');
+
+    // Get just the filename part (no directory)
+    name = name.replace(/\\/g, '/');
+    const lastSlash = name.lastIndexOf('/');
+    if (lastSlash >= 0) {
+        name = name.substring(lastSlash + 1);
+    }
+
+    return name || undefined;
+}
+
+/**
+ * Extract a clean function/variable name from a linker symbol name.
+ * Examples:
+ *   ".text.app_main"       → "app_main"
+ *   ".rodata.str1.1"       → "str1.1"  (less useful, but still a fallback)
+ *   "app_main"             → "app_main"
+ */
+function extractSymbolName(symName: string): string {
+    // Strip known section prefixes like .text. .rodata. .bss. .data.
+    const prefixMatch = symName.match(/^\.(text|rodata|data|bss|literal)\.(.*)/);
+    if (prefixMatch) {
+        return prefixMatch[2];
+    }
+    return symName;
+}
+
+/**
+ * Navigate to the source file where a symbol is defined.
+ */
+async function goToSourceFile(symbolName: string, sourceFile?: string, address?: number, sourceLine?: number): Promise<void> {
+    const cleanSymbol = extractSymbolName(symbolName);
+    const fileName = sourceFile ? extractSourceName(sourceFile) : undefined;
+
+    if (fileName) {
+        // Search workspace for files matching this name
+        const pattern = '**/' + fileName;
+        const uris = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 10);
+
+        if (uris.length > 0) {
+            // Try each matching file and look for the symbol
+            for (const uri of uris) {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                const text = doc.getText();
+                const lines = text.split('\n');
+
+                // Search for a line containing the symbol name (function/variable definition)
+                let bestLine = -1;
+                for (let i = 0; i < lines.length; i++) {
+                    const ln = lines[i];
+                    if (ln.indexOf(cleanSymbol) !== -1) {
+                        // Prefer lines that look like definitions (not just references)
+                        // e.g., "void app_main(void) {" or "int my_var ="
+                        if (/^\s*(void|int|char|uint|static|const|extern|unsigned|signed|struct|enum|float|double|bool|IRAM_ATTR|DRAM_ATTR)\b/.test(ln) ||
+                            /\b\w+\s+\**\s*\b/.test(ln)) {
+                            bestLine = i;
+                            break;
+                        }
+                        if (bestLine === -1) {
+                            bestLine = i;
+                        }
+                    }
+                }
+
+                if (bestLine >= 0) {
+                    const editor = await vscode.window.showTextDocument(doc, {
+                        viewColumn: vscode.ViewColumn.One,
+                        preserveFocus: false,
+                        selection: new vscode.Range(bestLine, 0, bestLine, 0),
+                    });
+                    editor.revealRange(new vscode.Range(bestLine, 0, bestLine, 0), vscode.TextEditorRevealType.InCenter);
+                    return;
+                }
+            }
+
+            // File found but symbol not found inside — just open the first match
+            const doc = await vscode.workspace.openTextDocument(uris[0]);
+            await vscode.window.showTextDocument(doc, {
+                viewColumn: vscode.ViewColumn.One,
+                preserveFocus: false,
+            });
+            return;
+        }
+    }
+
+    // Fallback: use VS Code's built-in symbol search
+    const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+        'vscode.executeWorkspaceSymbolProvider', cleanSymbol
+    );
+    if (symbols && symbols.length > 0) {
+        // Find exact match
+        const exact = symbols.find(s => s.name === cleanSymbol) || symbols[0];
+        const doc = await vscode.workspace.openTextDocument(exact.location.uri);
+        const line = exact.location.range.start.line;
+        const editor = await vscode.window.showTextDocument(doc, {
+            viewColumn: vscode.ViewColumn.One,
+            preserveFocus: false,
+            selection: new vscode.Range(line, 0, line, 0),
+        });
+        editor.revealRange(new vscode.Range(line, 0, line, 0), vscode.TextEditorRevealType.InCenter);
+        return;
+    }
+
+    // Source not found
+    vscode.window.showWarningMessage(
+        `Could not find source for '${cleanSymbol}'` +
+        (fileName ? ` in ${fileName}` : '') +
+        '. The source file may not be in the current workspace.'
+    );
 }
 
 export function deactivate() {}
