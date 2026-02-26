@@ -69,6 +69,10 @@ export class MemoryMapPanel {
         this.onSymbolSelected = callback;
     }
 
+    setTitle(title: string): void {
+        this.panel.title = title;
+    }
+
     updateLayout(layout: MemoryLayout): void {
         this.panel.webview.postMessage({
             type: 'updateLayout',

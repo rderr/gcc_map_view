@@ -71,9 +71,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
-function showMemoryMap(context: vscode.ExtensionContext, layout: MemoryLayout): void {
+function showMemoryMap(context: vscode.ExtensionContext, layout: MemoryLayout, fileName?: string): void {
     const panel = MemoryMapPanel.createOrShow(context.extensionUri.fsPath);
     panel.updateLayout(layout);
+    if (fileName) {
+        panel.setTitle('Memory Map \u2014 ' + fileName);
+    }
 
     // Webview click → navigate in editor
     panel.setOnSectionSelected((_sectionName, sourceLine) => {
@@ -147,13 +150,15 @@ function parseDocument(context: vscode.ExtensionContext, document: vscode.TextDo
     }
 
     // Auto-open or update the Memory Map panel
+    var baseName = path.basename(filePath);
     if (layout) {
         if (MemoryMapPanel.getCurrent()) {
             // Panel already open — just update it
             MemoryMapPanel.getCurrent()!.updateLayout(layout);
+            MemoryMapPanel.getCurrent()!.setTitle('Memory Map \u2014 ' + baseName);
         } else {
             // Auto-open panel for map/ld files
-            showMemoryMap(context, layout);
+            showMemoryMap(context, layout, baseName);
         }
     }
 }

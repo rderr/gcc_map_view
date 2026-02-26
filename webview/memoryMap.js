@@ -66,10 +66,6 @@
 
         var fragment = document.createDocumentFragment();
 
-        var heading = document.createElement('h1');
-        heading.textContent = 'Memory Map';
-        fragment.appendChild(heading);
-
         var container = document.createElement('div');
         container.className = 'memory-container';
 
@@ -91,7 +87,8 @@
 
             var info = document.createElement('div');
             info.className = 'region-info';
-            info.textContent = formatHex(region.origin) + ' \u2502 ' + formatSize(region.length) + ' (' + pct.toFixed(1) + '% used)';
+            info.textContent = formatHex(region.origin) + ' \u2502 ' + formatSize(region.length) + ' (' + pct.toFixed(1) + '% used)' +
+                (region.attributes ? '  [' + region.attributes + ']' : '');
             col.appendChild(info);
 
             var bar = document.createElement('div');

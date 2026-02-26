@@ -74,13 +74,13 @@ h1 {
 
 .region-header {
     font-weight: 600;
-    font-size: 1.1em;
+    font-size: 1.4em;
     margin-bottom: 4px;
     color: var(--vscode-foreground, #ccc);
 }
 
 .region-info {
-    font-size: 0.82em;
+    font-size: 1em;
     color: var(--vscode-descriptionForeground, #888);
     margin-bottom: 8px;
 }
