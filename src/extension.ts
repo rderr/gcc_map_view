@@ -36,6 +36,40 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // Command: Find in Memory Map (right-click context menu)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('gccMapView.findInMemoryMap', () => {
+            console.log('[GCC Map View] findInMemoryMap command triggered');
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                console.log('[GCC Map View] No active editor');
+                return;
+            }
+
+            // Get the word under cursor, or the selected text
+            const selection = editor.selection;
+            let word: string;
+            if (selection.isEmpty) {
+                const wordRange = editor.document.getWordRangeAtPosition(selection.active);
+                if (!wordRange) {
+                    vscode.window.showWarningMessage('No symbol under cursor.');
+                    return;
+                }
+                word = editor.document.getText(wordRange);
+            } else {
+                word = editor.document.getText(selection).trim();
+            }
+
+            if (!word) {
+                vscode.window.showWarningMessage('No symbol selected.');
+                return;
+            }
+
+            console.log('[GCC Map View] Searching for symbol:', word, 'hasLayout:', !!currentLayout);
+            findSymbolInMemoryMap(word);
+        })
+    );
+
     // Command: Refresh
     context.subscriptions.push(
         vscode.commands.registerCommand('gccMapView.refresh', () => {
@@ -144,6 +178,7 @@ function parseDocument(context: vscode.ExtensionContext, document: vscode.TextDo
     lastParsedVersion = document.version;
 
     currentLayout = layout;
+    vscode.commands.executeCommand('setContext', 'gccMapView.hasLayout', true);
 
     // Apply editor decorations for .map files
     if (ext === '.map' && layout) {
@@ -394,6 +429,83 @@ async function goToSourceFile(symbolName: string, sourceFile?: string, address?:
         (fileName ? ` in ${fileName}` : '') +
         '. The source file may not be in the current workspace.'
     );
+}
+
+/**
+ * Find a symbol in the parsed memory map and navigate to it.
+ * Checks linked symbols first, then the discarded sections in the raw map file.
+ */
+async function findSymbolInMemoryMap(symbolName: string): Promise<void> {
+    if (!currentLayout) {
+        vscode.window.showWarningMessage('No memory map loaded. Open a .map file first.');
+        return;
+    }
+
+    // Check if the symbol exists anywhere in the parsed layout
+    let found = false;
+    for (const region of currentLayout.regions) {
+        for (const section of region.sections) {
+            for (const sym of section.symbols) {
+                const cleanName = extractSymbolName(sym.name);
+                if (cleanName === symbolName || sym.name === symbolName ||
+                    sym.name.indexOf(symbolName) >= 0) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) { break; }
+        }
+        if (found) { break; }
+    }
+
+    // Check discarded sections in the raw map file
+    let inDiscarded = false;
+    if (!found && currentLayout.sourceFile) {
+        const uri = vscode.Uri.file(currentLayout.sourceFile);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const text = doc.getText();
+        const lines = text.split('\n');
+
+        let inDiscardedSection = false;
+        for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            if (/^Discarded input sections\s*$/i.test(trimmed)) {
+                inDiscardedSection = true;
+                continue;
+            }
+            if (inDiscardedSection && (/^Memory Configuration\s*$/.test(trimmed) ||
+                /^Linker script and memory map\s*$/i.test(trimmed))) {
+                break;
+            }
+            if (inDiscardedSection && lines[i].indexOf(symbolName) !== -1) {
+                inDiscarded = true;
+                break;
+            }
+        }
+    }
+
+    if (!found && !inDiscarded) {
+        vscode.window.showWarningMessage(
+            `'${symbolName}' was not found in the memory map. ` +
+            'It may be inlined, optimized out, or defined in a library not included in the map file.'
+        );
+        return;
+    }
+
+    if (!found && inDiscarded) {
+        vscode.window.showWarningMessage(
+            `'${symbolName}' was found in the discarded input sections. ` +
+            'It was removed by the linker (likely unused or garbage-collected with --gc-sections).'
+        );
+        return;
+    }
+
+    // Reveal the Memory Map panel and search for the symbol
+    const panel = MemoryMapPanel.getCurrent();
+    if (panel) {
+        panel.reveal();
+        panel.searchSymbol(symbolName);
+    }
 }
 
 export function deactivate() {}

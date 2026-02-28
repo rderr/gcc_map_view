@@ -307,9 +307,20 @@ h1 {
     text-overflow: ellipsis;
 }
 
+/* ── Sticky top bar (stats + search) ── */
+#top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--vscode-editor-background, #1e1e1e);
+    padding: 16px 16px 4px;
+    width: 100%;
+}
+
 /* ── Stats panel ── */
 .stats-panel {
-    margin-bottom: 16px;
+    margin-bottom: 8px;
+    max-width: 400px;
 }
 
 .stats-header {
@@ -327,6 +338,7 @@ h1 {
 
 .stats-body {
     padding: 8px 0;
+    background: var(--vscode-editor-background, #1e1e1e);
 }
 
 .stats-table {
@@ -362,16 +374,25 @@ h1 {
     color: var(--vscode-foreground, #ccc);
 }
 
+.stats-clickable {
+    cursor: pointer;
+}
+
+.stats-clickable:hover td {
+    color: #fff;
+}
+
 /* ── Search ── */
 .search-wrapper {
     position: relative;
     margin-bottom: 16px;
+    max-width: 400px;
 }
 
 .search-input {
     width: 100%;
-    padding: 8px 12px;
-    font-size: 1em;
+    padding: 10px 14px;
+    font-size: 1.1em;
     font-family: var(--vscode-font-family);
     color: var(--vscode-input-foreground, #ccc);
     background: var(--vscode-input-background, #2a2a2a);

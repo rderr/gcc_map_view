@@ -76,6 +76,10 @@ export class MemoryMapPanel {
         this.onGoToSource = callback;
     }
 
+    reveal(): void {
+        this.panel.reveal(undefined, true);
+    }
+
     setTitle(title: string): void {
         this.panel.title = title;
     }
@@ -100,6 +104,22 @@ export class MemoryMapPanel {
             symbol: symbolName,
             section: sectionName,
             address,
+        });
+    }
+
+    focusSymbol(symbolName: string, sectionName: string, address?: number): void {
+        this.panel.webview.postMessage({
+            type: 'focusSymbol',
+            symbol: symbolName,
+            section: sectionName,
+            address,
+        });
+    }
+
+    searchSymbol(query: string): void {
+        this.panel.webview.postMessage({
+            type: 'searchSymbol',
+            query,
         });
     }
 

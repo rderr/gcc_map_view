@@ -67,8 +67,21 @@
         "command": "gccMapView.refresh",
         "title": "Refresh Memory Map",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "gccMapView.findInMemoryMap",
+        "title": "Find in Memory Map"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "gccMapView.findInMemoryMap",
+          "group": "navigation@100",
+          "when": "gccMapView.hasLayout && resourceExtname =~ /\\.(c|cpp|cc|cxx|h|hpp|hxx|hh|s|S|asm|rs|zig|d)$/"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

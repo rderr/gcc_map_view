@@ -167,6 +167,8 @@
             for (var ti = 0; ti < top10.length; ti++) {
                 var sym = top10[ti];
                 var tr = document.createElement('tr');
+                tr.className = 'stats-clickable';
+                tr.setAttribute('data-symbol', sym.name);
                 var tdName = document.createElement('td');
                 tdName.className = 'stats-label';
                 tdName.textContent = sym.name;
@@ -178,6 +180,15 @@
                 tr.appendChild(tdSize);
                 topTable.appendChild(tr);
             }
+            topTable.addEventListener('click', function (e) {
+                var row = e.target.closest('.stats-clickable');
+                if (row) {
+                    var symName = row.getAttribute('data-symbol');
+                    if (symName) {
+                        searchFor(symName);
+                    }
+                }
+            });
             body.appendChild(topTable);
         }
 
@@ -230,6 +241,54 @@
         return wrapper;
     }
 
+    function selectSearchResult(entry, resultsEl) {
+        resultsEl.innerHTML = '';
+        resultsEl.classList.remove('visible');
+
+        if (entry.type === 'section') {
+            if (entry.sectionBlock) {
+                entry.sectionBlock.click();
+                entry.sectionBlock.scrollIntoView({ behavior: 'instant', block: 'center' });
+            }
+            // Navigate to section in map file
+            window.mapViewIPC.postMessage({
+                type: 'selectSection',
+                section: entry.name,
+                sourceLine: entry.sourceLine,
+            });
+        } else {
+            // Open the section detail, then highlight the symbol
+            if (entry.sectionBlock) {
+                entry.sectionBlock.click();
+                entry.sectionBlock.scrollIntoView({ behavior: 'instant', block: 'center' });
+            }
+            // Navigate to symbol in map file
+            window.mapViewIPC.postMessage({
+                type: 'selectSymbol',
+                symbol: entry.name,
+                section: entry.section,
+                address: entry.address,
+                sourceLine: entry.sourceLine,
+            });
+            // After detail panel renders, highlight the symbol row
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    var el;
+                    if (entry.address !== undefined) {
+                        el = detailSymbolIndex[entry.section + '\0' + String(entry.address)];
+                    }
+                    if (!el) {
+                        el = detailSymbolIndex[entry.section + '\0' + entry.name];
+                    }
+                    if (el) {
+                        el.classList.add('highlighted');
+                        el.scrollIntoView({ behavior: 'instant', block: 'center' });
+                    }
+                });
+            });
+        }
+    }
+
     function doSearch(query, resultsEl) {
         resultsEl.innerHTML = '';
         if (!query || query.length < 2) {
@@ -278,37 +337,7 @@
 
             (function (entry) {
                 item.addEventListener('click', function () {
-                    resultsEl.innerHTML = '';
-                    resultsEl.classList.remove('visible');
-                    if (entry.type === 'section') {
-                        // Click the section block to open it
-                        if (entry.sectionBlock) {
-                            entry.sectionBlock.click();
-                            entry.sectionBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    } else {
-                        // Open the section detail, then highlight the symbol
-                        if (entry.sectionBlock) {
-                            entry.sectionBlock.click();
-                            entry.sectionBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                        // After detail panel renders, highlight the symbol row
-                        requestAnimationFrame(function () {
-                            requestAnimationFrame(function () {
-                                var el;
-                                if (entry.address !== undefined) {
-                                    el = detailSymbolIndex[entry.section + '\0' + String(entry.address)];
-                                }
-                                if (!el) {
-                                    el = detailSymbolIndex[entry.section + '\0' + entry.name];
-                                }
-                                if (el) {
-                                    el.classList.add('highlighted');
-                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }
-                            });
-                        });
-                    }
+                    selectSearchResult(entry, resultsEl);
                 });
             })(match);
 
@@ -335,13 +364,15 @@
             return;
         }
 
+        // ── Top bar: stats + search (outside app-layout for sticky) ──
+        var topBar = document.getElementById('top-bar');
+        if (topBar) {
+            topBar.innerHTML = '';
+            topBar.appendChild(buildStatsPanel(layout));
+            topBar.appendChild(buildSearchBox(layout));
+        }
+
         var fragment = document.createDocumentFragment();
-
-        // ── Stats panel ──
-        fragment.appendChild(buildStatsPanel(layout));
-
-        // ── Search box ──
-        fragment.appendChild(buildSearchBox(layout));
 
         var container = document.createElement('div');
         container.className = 'memory-container';
@@ -836,7 +867,7 @@
             var els = sectionIndex[sectionName];
             for (var i = 0; i < els.length; i++) {
                 els[i].classList.add('highlighted');
-                els[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                els[i].scrollIntoView({ behavior: 'instant', block: 'nearest' });
             }
             currentHighlight = els;
         }
@@ -846,21 +877,47 @@
         clearHighlights();
         if (!symbolName) { return; }
 
-        if (sectionName) {
+        // Open the section's detail panel if not already showing
+        if (sectionName && sectionIndex[sectionName]) {
+            var secBlock = sectionIndex[sectionName][0];
+            if (secBlock) {
+                var secData = sectionDataMap[sectionName];
+                var cIdx = Number(secBlock.getAttribute('data-color-index'));
+                if (secData) {
+                    showDetail(secData, cIdx, secBlock);
+                }
+                secBlock.scrollIntoView({ behavior: 'instant', block: 'center' });
+            }
             highlightSection(sectionName);
         }
 
-        var el;
-        if (address !== undefined && sectionName) {
-            el = detailSymbolIndex[sectionName + '\0' + String(address)];
-        }
-        if (!el && sectionName) {
-            el = detailSymbolIndex[sectionName + '\0' + symbolName];
-        }
-        if (el) {
-            el.classList.add('highlighted');
-            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        // Highlight the symbol row after the detail panel renders
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                var el;
+                if (address !== undefined && sectionName) {
+                    el = detailSymbolIndex[sectionName + '\0' + String(address)];
+                }
+                if (!el && sectionName) {
+                    el = detailSymbolIndex[sectionName + '\0' + symbolName];
+                }
+                // Also try matching by cleaned symbol name (e.g., search for "app_main" matches ".text.app_main")
+                if (!el && sectionName) {
+                    var keys = Object.keys(detailSymbolIndex);
+                    for (var k = 0; k < keys.length; k++) {
+                        var parts = keys[k].split('\0');
+                        if (parts[1] && parts[1].indexOf(symbolName) >= 0) {
+                            el = detailSymbolIndex[keys[k]];
+                            break;
+                        }
+                    }
+                }
+                if (el) {
+                    el.classList.add('highlighted');
+                    el.scrollIntoView({ behavior: 'instant', block: 'center' });
+                }
+            });
+        });
     }
 
     function escapeHtml(str) {
@@ -871,6 +928,102 @@
 
     window._mapHighlightSection = highlightSection;
     window._mapHighlightSymbol = highlightSymbol;
+
+    /**
+     * Open a section's detail panel and highlight a specific symbol by name.
+     * Used by the "Find in Memory Map" command.
+     */
+    function focusSymbol(symbolName, sectionName, address) {
+        // Try lookup first, then fall back to DOM query
+        var secBlocks = sectionIndex[sectionName];
+        if (!secBlocks || secBlocks.length === 0) {
+            // Fallback: search DOM for section block
+            var allBlocks = document.querySelectorAll('.section-block[data-section]');
+            for (var i = 0; i < allBlocks.length; i++) {
+                if (allBlocks[i].getAttribute('data-section') === sectionName) {
+                    secBlocks = [allBlocks[i]];
+                    break;
+                }
+            }
+        }
+        if (!secBlocks || secBlocks.length === 0) { return; }
+
+        var secBlock = secBlocks[0];
+        var secData = sectionDataMap[sectionName];
+        var cIdx = Number(secBlock.getAttribute('data-color-index'));
+
+        if (secData) {
+            showDetail(secData, cIdx, secBlock);
+        }
+        secBlock.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+        // Wait for detail panel to fully render, then find and highlight the symbol
+        setTimeout(function () {
+            var el = findSymbolRow(symbolName, sectionName, address);
+            if (el) {
+                el.classList.add('highlighted');
+                el.scrollIntoView({ behavior: 'instant', block: 'center' });
+            }
+        }, 300);
+    }
+
+    /**
+     * Find a symbol row in the detail panel by address, name, or partial match.
+     */
+    function findSymbolRow(symbolName, sectionName, address) {
+        // 1. Try detailSymbolIndex by address
+        if (address !== undefined && sectionName) {
+            var el = detailSymbolIndex[sectionName + '\0' + String(address)];
+            if (el) { return el; }
+        }
+        // 2. Try by exact name
+        if (sectionName) {
+            var el = detailSymbolIndex[sectionName + '\0' + symbolName];
+            if (el) { return el; }
+        }
+        // 3. Try partial match in index (e.g., "close_udp_socket" matches ".text.close_udp_socket")
+        var keys = Object.keys(detailSymbolIndex);
+        for (var k = 0; k < keys.length; k++) {
+            var parts = keys[k].split('\0');
+            if (parts[1] && parts[1].indexOf(symbolName) >= 0) {
+                return detailSymbolIndex[keys[k]];
+            }
+        }
+        // 4. Last resort: search DOM directly by data-symbol attribute
+        var rows = document.querySelectorAll('.detail-row[data-symbol]');
+        for (var r = 0; r < rows.length; r++) {
+            var ds = rows[r].getAttribute('data-symbol');
+            if (ds === symbolName || (ds && ds.indexOf(symbolName) >= 0)) {
+                return rows[r];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Programmatically fill the search box and trigger a search.
+     * Used by the "Find in Memory Map" right-click command.
+     */
+    function searchFor(query) {
+        var input = document.querySelector('.search-input');
+        var resultsEl = document.querySelector('.search-results');
+        if (!input || !resultsEl) { return; }
+
+        input.value = query;
+        input.focus();
+
+        // Defer so the current click event finishes bubbling
+        // (otherwise the "close on outside click" handler immediately hides results)
+        setTimeout(function () {
+            doSearch(query, resultsEl);
+
+            // If exactly one result, auto-select it
+            var items = resultsEl.querySelectorAll('.search-result-item:not(.search-no-result)');
+            if (items.length === 1) {
+                items[0].click();
+            }
+        }, 0);
+    }
 
     window.mapViewIPC.onMessage(function (msg) {
         switch (msg.type) {
@@ -883,6 +1036,12 @@
                 break;
             case 'highlightSymbol':
                 highlightSymbol(msg.symbol, msg.section, msg.address);
+                break;
+            case 'focusSymbol':
+                focusSymbol(msg.symbol, msg.section, msg.address);
+                break;
+            case 'searchSymbol':
+                searchFor(msg.query);
                 break;
         }
     });
