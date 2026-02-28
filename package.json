@@ -87,13 +87,17 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "pretest": "tsc -p tsconfig.test.json",
+    "test": "mocha out-test/test/**/*.test.js",
     "package": "vsce package",
     "publish": "vsce publish"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
+    "mocha": "^11.7.5",
     "typescript": "^5.3.0"
   }
 }

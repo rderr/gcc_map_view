@@ -4,6 +4,7 @@ import { parseLd } from './parsers/ldParser';
 import { parseMap, isGccMapFile } from './parsers/mapParser';
 import { MemoryMapPanel } from './providers/memoryMapPanel';
 import { MemoryLayout } from './models/types';
+import { extractSourceName, extractSymbolName, hexVariants } from './util/symbols';
 
 // Current parsed layout
 let currentLayout: MemoryLayout | undefined;
@@ -124,6 +125,7 @@ function showMemoryMap(context: vscode.ExtensionContext, layout: MemoryLayout, f
     });
 
     panel.setOnSymbolSelected((symbolName, _sectionName, address, sourceLine) => {
+        console.log('[GCC Map View] onSymbolSelected:', symbolName, 'address:', address, 'sourceLine:', sourceLine, 'sourceFile:', currentLayout?.sourceFile);
         if (address !== undefined) {
             goToAddress(address, symbolName);
         } else {
@@ -267,14 +269,16 @@ async function goToLine(sourceLine: number | undefined): Promise<void> {
  * Navigate to a symbol in the map file by searching for its hex address.
  */
 async function goToAddress(address: number, symbolName?: string): Promise<void> {
-    if (!currentLayout?.sourceFile) { return; }
+    console.log('[GCC Map View] goToAddress:', address, 'symbol:', symbolName, 'sourceFile:', currentLayout?.sourceFile);
+    if (!currentLayout?.sourceFile) {
+        console.log('[GCC Map View] goToAddress: no sourceFile, aborting');
+        return;
+    }
 
     const uri = vscode.Uri.file(currentLayout.sourceFile);
     const doc = await vscode.workspace.openTextDocument(uri);
 
-    const hexRaw = address.toString(16);
-    const hexPadded = '0x' + hexRaw.padStart(8, '0');
-    const hexMinimal = '0x' + hexRaw;
+    const { hex8: hexPad8, hex16: hexPad16, hexMin: hexMinimal } = hexVariants(address);
     const text = doc.getText();
     const lines = text.split('\n');
 
@@ -282,7 +286,7 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
     for (let i = 0; i < lines.length; i++) {
         const ln = lines[i];
         const lnLower = ln.toLowerCase();
-        if (lnLower.indexOf(hexPadded) === -1 && lnLower.indexOf(hexMinimal) === -1) { continue; }
+        if (lnLower.indexOf(hexPad8) === -1 && lnLower.indexOf(hexPad16) === -1 && lnLower.indexOf(hexMinimal) === -1) { continue; }
         if (symbolName && ln.indexOf(symbolName) !== -1) {
             bestLine = i;
             break;
@@ -292,6 +296,7 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
         }
     }
 
+    console.log('[GCC Map View] goToAddress result: bestLine=', bestLine, 'hex8=', hexPad8, 'hex16=', hexPad16);
     if (bestLine >= 0) {
         // Use goto-line style navigation: show doc, set selection, then reveal
         const editor = await vscode.window.showTextDocument(doc, {
@@ -301,50 +306,6 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
         });
         editor.revealRange(new vscode.Range(bestLine, 0, bestLine, 0), vscode.TextEditorRevealType.InCenter);
     }
-}
-
-/**
- * Extract a source filename from a linker object file reference.
- * Examples:
- *   "esp-idf/main/libmain.a(main.c.obj)" → "main.c"
- *   "CMakeFiles/app.dir/src/main.c.obj"   → "main.c"
- *   "/path/to/file.o"                      → "file"  (no extension known)
- *   "lib/libfoo.a(bar.cpp.obj)"            → "bar.cpp"
- */
-function extractSourceName(objRef: string): string | undefined {
-    if (!objRef) { return undefined; }
-
-    // Pattern: lib.a(file.c.obj) or lib.a(file.cpp.obj)
-    const archiveMatch = objRef.match(/\(([^)]+)\)\s*$/);
-    const inner = archiveMatch ? archiveMatch[1] : objRef;
-
-    // Strip trailing .obj or .o
-    let name = inner.replace(/\.obj$/i, '').replace(/\.o$/i, '');
-
-    // Get just the filename part (no directory)
-    name = name.replace(/\\/g, '/');
-    const lastSlash = name.lastIndexOf('/');
-    if (lastSlash >= 0) {
-        name = name.substring(lastSlash + 1);
-    }
-
-    return name || undefined;
-}
-
-/**
- * Extract a clean function/variable name from a linker symbol name.
- * Examples:
- *   ".text.app_main"       → "app_main"
- *   ".rodata.str1.1"       → "str1.1"  (less useful, but still a fallback)
- *   "app_main"             → "app_main"
- */
-function extractSymbolName(symName: string): string {
-    // Strip known section prefixes like .text. .rodata. .bss. .data.
-    const prefixMatch = symName.match(/^\.(text|rodata|data|bss|literal)\.(.*)/);
-    if (prefixMatch) {
-        return prefixMatch[2];
-    }
-    return symName;
 }
 
 /**

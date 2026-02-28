@@ -2,8 +2,8 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2022",
-    "outDir": "out",
-    "rootDir": "src",
+    "outDir": "out-test",
+    "rootDir": ".",
     "lib": ["ES2022"],
     "sourceMap": true,
     "strict": true,
@@ -12,5 +12,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", ".vscode-test", "out", "out-test", "electron", "test"]
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", ".vscode-test", "out", "electron"]
 }
