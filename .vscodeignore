@@ -4,12 +4,13 @@
 src/**
 node_modules/**
 samples/**
+test/**
+out-test/**
+out-electron/**
 .gitignore
 tsconfig.json
+tsconfig.test.json
 **/*.ts
 !out/**
 out/**/*.map
-electron/**
-out-electron/**
-dist/**
-tsconfig.electron.json
+Screenshot*.png
