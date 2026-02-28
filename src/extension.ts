@@ -23,7 +23,7 @@ let lastParsedUri: string | undefined;
 let lastParsedVersion: number | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('GCC Map View: activating');
+
 
     // Command: Show Memory Map webview
     context.subscriptions.push(
@@ -40,12 +40,8 @@ export function activate(context: vscode.ExtensionContext) {
     // Command: Find in Memory Map (right-click context menu)
     context.subscriptions.push(
         vscode.commands.registerCommand('gccMapView.findInMemoryMap', () => {
-            console.log('[GCC Map View] findInMemoryMap command triggered');
             const editor = vscode.window.activeTextEditor;
-            if (!editor) {
-                console.log('[GCC Map View] No active editor');
-                return;
-            }
+            if (!editor) { return; }
 
             // Get the word under cursor, or the selected text
             const selection = editor.selection;
@@ -66,7 +62,6 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            console.log('[GCC Map View] Searching for symbol:', word, 'hasLayout:', !!currentLayout);
             findSymbolInMemoryMap(word);
         })
     );
@@ -125,7 +120,6 @@ function showMemoryMap(context: vscode.ExtensionContext, layout: MemoryLayout, f
     });
 
     panel.setOnSymbolSelected((symbolName, _sectionName, address, sourceLine) => {
-        console.log('[GCC Map View] onSymbolSelected:', symbolName, 'address:', address, 'sourceLine:', sourceLine, 'sourceFile:', currentLayout?.sourceFile);
         if (address !== undefined) {
             goToAddress(address, symbolName);
         } else {
@@ -269,11 +263,7 @@ async function goToLine(sourceLine: number | undefined): Promise<void> {
  * Navigate to a symbol in the map file by searching for its hex address.
  */
 async function goToAddress(address: number, symbolName?: string): Promise<void> {
-    console.log('[GCC Map View] goToAddress:', address, 'symbol:', symbolName, 'sourceFile:', currentLayout?.sourceFile);
-    if (!currentLayout?.sourceFile) {
-        console.log('[GCC Map View] goToAddress: no sourceFile, aborting');
-        return;
-    }
+    if (!currentLayout?.sourceFile) { return; }
 
     const uri = vscode.Uri.file(currentLayout.sourceFile);
     const doc = await vscode.workspace.openTextDocument(uri);
@@ -296,7 +286,6 @@ async function goToAddress(address: number, symbolName?: string): Promise<void> 
         }
     }
 
-    console.log('[GCC Map View] goToAddress result: bestLine=', bestLine, 'hex8=', hexPad8, 'hex16=', hexPad16);
     if (bestLine >= 0) {
         // Use goto-line style navigation: show doc, set selection, then reveal
         const editor = await vscode.window.showTextDocument(doc, {
