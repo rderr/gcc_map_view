@@ -1,6 +1,6 @@
 # GCC Map View
 
-A Visual Studio Code extension that visualizes GCC map files (`.map`) with an interactive tree view and graphical memory map.
+A Visual Studio Code extension that visualizes GCC linker map files (`.map`) with an interactive graphical memory map.
 
 Works with any GCC-based toolchain — from embedded targets (STM32, ESP32) to x86/x64 Linux builds.
 
@@ -8,29 +8,37 @@ Works with any GCC-based toolchain — from embedded targets (STM32, ESP32) to x
 
 ## Features
 
-### Memory Layout Tree
-
-Browse your memory layout as a hierarchical tree: **Regions > Sections > Symbols**. Each node shows its address, size, and usage. Click any section or symbol to jump to its definition in the editor.
-
 ### Graphical Memory Map
 
-Open a color-coded visualization of your memory regions with proportional section blocks and symbol grids. Hover for details, click to navigate. The webview stays in sync with the tree view and editor.
+Open a color-coded visualization of your memory regions. Each region displays proportional section blocks showing relative sizes at a glance. Click any section to drill into its symbols.
 
-### Search & Filter Symbols
+### Detail Panel
 
-Use the search icon in the tree title bar to filter symbols by name. Matching regions and sections auto-expand so results are immediately visible. Clear the filter to restore the full tree.
+Click a section to open a detail panel showing every symbol as a labeled row with proportional height. Each row displays the symbol name, hex address, and size. Sort by address or size.
+
+### Symbol Search
+
+Search symbols and sections by name with the always-visible search bar. Results appear in a dropdown — click to navigate to the symbol in both the map visualization and the source text.
+
+### Statistics Panel
+
+Collapsible stats panel shows per-region usage with progress bars, total flash/RAM consumption, discarded section counts, and a clickable Top 10 largest symbols list.
+
+### Go to Source
+
+Click the arrow icon on any symbol row to jump directly to its definition in your workspace. The extension extracts source filenames from linker object references and searches your workspace automatically.
+
+### Find in Memory Map
+
+Right-click any symbol in a source file (C, C++, Rust, Zig, assembly) and select **Find in Memory Map** to locate it in the visualization. If the symbol was removed by `--gc-sections`, you'll be notified.
 
 ### Editor Decorations
 
 `.map` files get color-coded background highlights on each section, with matching overview ruler markers for quick orientation.
 
-### Go to Source
+### Auto-Open
 
-Double-click any symbol to jump to its definition in your workspace. The extension extracts source filenames from map file object references and searches your workspace automatically.
-
-### Bidirectional Navigation
-
-Click a section in the webview to reveal it in the tree and editor. Click a tree item to highlight it in the webview and jump to the source line. Everything stays connected.
+The memory map webview opens automatically when you open a `.map` file — no extra clicks needed.
 
 ## Supported Files
 
@@ -40,21 +48,18 @@ Click a section in the webview to reveal it in the tree and editor. Click a tree
 
 ## Commands
 
-| Command | Description | Icon |
-|---------|-------------|------|
-| **Show Memory Map** | Open the graphical memory map webview | `$(graph)` |
-| **Refresh Memory Map** | Re-parse the active file | `$(refresh)` |
-| **Open Map File** | Browse and open a `.map` file | `$(file)` |
-| **Search Symbols** | Filter the tree by symbol name | `$(search)` |
-| **Clear Search** | Remove the active filter | `$(clear-all)` |
-| **Open Source File** | Navigate to a symbol's source file (context menu) | `$(go-to-file)` |
+| Command | Description |
+|---------|-------------|
+| **Show Memory Map** | Open the graphical memory map webview |
+| **Refresh Memory Map** | Re-parse the active file |
+| **Find in Memory Map** | Locate a symbol from source code in the memory map (right-click context menu) |
 
 ## Getting Started
 
 1. Install the extension
 2. Open a `.map` file
-3. The **GCC Memory Map** sidebar appears automatically with the parsed layout
-4. Click the graph icon in the tree title bar to open the graphical memory map
+3. The graphical memory map opens automatically
+4. Click sections to explore symbols, use the search bar to find specific items
 
 ## Development
 
@@ -68,6 +73,12 @@ Click a section in the webview to reveal it in the tree and editor. Click a tree
 ```bash
 npm install
 npm run compile
+```
+
+### Test
+
+```bash
+npm test
 ```
 
 ### Watch
@@ -91,15 +102,17 @@ src/
 │   ├── ldParser.ts           # Linker script parser
 │   └── mapParser.ts          # Map file parser
 ├── providers/
-│   ├── memoryTreeProvider.ts # Tree data provider with filtering
-│   ├── memoryTreeItems.ts    # Tree item classes (Region, Section, Symbol)
 │   └── memoryMapPanel.ts     # Webview panel (graphical map)
-├── util/
-│   └── format.ts             # Hex/size formatting utilities
-└── webview/
-    ├── memoryMap.html        # Webview template
-    ├── memoryMap.css         # Webview styles
-    └── memoryMap.js          # Webview rendering logic
+└── util/
+    ├── format.ts             # Hex/size formatting utilities
+    └── symbols.ts            # Symbol name extraction utilities
+webview/
+├── memoryMap.html            # Webview template
+├── memoryMap.css             # Webview styles
+└── memoryMap.js              # Webview rendering logic
+test/
+├── mapParser.test.ts         # Map parser tests
+└── symbols.test.ts           # Symbol utility tests
 ```
 
 ## License
