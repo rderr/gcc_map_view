@@ -6,3 +6,6 @@ node_modules/
 *.vsix
 .vscode-test/
 .claude/
+test/**/*.js
+test/**/*.js.map
+Screenshot*.png
