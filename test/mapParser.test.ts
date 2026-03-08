@@ -230,3 +230,50 @@ describe('parseMap — STM32F103', () => {
         assert.strictEqual(ram.used, 0x1c + 0x200 + 0x600);
     });
 });
+
+describe('parseMap — region at address 0x0 with discarded sections', () => {
+    let result: ReturnType<typeof parseMap>;
+
+    before(() => {
+        result = parseMap(loadSample('region_at_zero.map'));
+    });
+
+    it('should parse BOOTROM region at origin 0x0', () => {
+        const bootrom = result.regions.find(r => r.name === 'BOOTROM')!;
+        assert.strictEqual(bootrom.origin, 0x0);
+        assert.strictEqual(bootrom.length, 0x4000);
+    });
+
+    it('should count discarded sections', () => {
+        assert.ok(result.discardedCount! >= 5, `expected at least 5 discarded, got ${result.discardedCount}`);
+        assert.ok(result.discardedSize! > 0, 'discarded size should be > 0');
+    });
+
+    it('should not assign discarded sections to BOOTROM region', () => {
+        const bootrom = result.regions.find(r => r.name === 'BOOTROM')!;
+        // Only .boot_header (0x200) should be in BOOTROM, not discarded sections
+        assert.strictEqual(bootrom.sections.length, 1, `BOOTROM should have 1 section, got: ${bootrom.sections.map(s => s.name).join(', ')}`);
+        assert.strictEqual(bootrom.sections[0].name, '.boot_header');
+        assert.strictEqual(bootrom.used, 0x200);
+    });
+
+    it('should not add discarded entries as symbols in the last section', () => {
+        const bss = result.sections.find(s => s.name === '.bss')!;
+        const bogusSymbols = bss.symbols.filter(s => s.address === 0 && s.size > 0);
+        assert.strictEqual(bogusSymbols.length, 0,
+            `discarded entries leaked into .bss as symbols: ${bogusSymbols.map(s => s.name).join(', ')}`);
+    });
+
+    it('should assign .text to FLASH region', () => {
+        const flash = result.regions.find(r => r.name === 'FLASH')!;
+        const text = flash.sections.find(s => s.name === '.text');
+        assert.ok(text, '.text should be in FLASH');
+    });
+
+    it('should assign .data and .bss to RAM region', () => {
+        const ram = result.regions.find(r => r.name === 'RAM')!;
+        const sectionNames = ram.sections.map(s => s.name);
+        assert.ok(sectionNames.includes('.data'), '.data should be in RAM');
+        assert.ok(sectionNames.includes('.bss'), '.bss should be in RAM');
+    });
+});

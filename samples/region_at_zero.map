@@ -1,0 +1,76 @@
+Archive member included to satisfy reference by file (symbol)
+
+Allocating common symbols
+Common symbol       size              file
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+BOOTROM          0x0000000000000000 0x0000000000004000 xr
+FLASH            0x0000000000004000 0x000000000003c000 xr
+RAM              0x0000000020000000 0x0000000000008000 xrw
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+LOAD build/startup.o
+LOAD build/main.o
+LOAD build/hal.o
+
+.boot_header    0x0000000000000000      0x200
+                0x0000000000000000                . = ALIGN (0x4)
+ *(.boot_header)
+ .boot_header   0x0000000000000000      0x200 build/startup.o
+                0x0000000000000000                __boot_header
+                0x0000000000000200                . = ALIGN (0x4)
+
+.text           0x0000000000004000     0x1a00
+                0x0000000000004000                . = ALIGN (0x4)
+ *(.text)
+ .text          0x0000000000004000       0x3c build/startup.o
+                0x0000000000004000                Reset_Handler
+                0x0000000000004030                Default_Handler
+ *(.text*)
+ .text.main     0x000000000000403c      0x120 build/main.o
+                0x000000000000403c                main
+ .text.SystemInit
+                0x000000000000415c       0x48 build/hal.o
+                0x000000000000415c                SystemInit
+ .text.HAL_Init
+                0x00000000000041a4       0x80 build/hal.o
+                0x00000000000041a4                HAL_Init
+                0x0000000000005a00                . = ALIGN (0x4)
+
+.rodata         0x0000000000005a00      0x100
+                0x0000000000005a00                . = ALIGN (0x4)
+ .rodata.version_string
+                0x0000000000005a00       0x20 build/main.o
+                0x0000000000005a00                version_string
+                0x0000000000005b00                . = ALIGN (0x4)
+
+.data           0x0000000020000000       0x1c
+                0x0000000020000000                . = ALIGN (0x4)
+ .data          0x0000000020000000       0x1c build/main.o
+                0x0000000020000000                SystemCoreClock
+                0x0000000020000004                config_flags
+                0x000000002000001c                . = ALIGN (0x4)
+
+.bss            0x000000002000001c      0x120
+                0x000000002000001c                . = ALIGN (0x4)
+ .bss           0x000000002000001c      0x100 build/main.o
+                0x000000002000001c                rxBuffer
+ .bss           0x000000002000011c       0x20 build/hal.o
+                0x000000002000011c                dmaDescriptors
+                0x000000002000013c                . = ALIGN (0x4)
+
+/DISCARD/       : { *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) }
+
+Discarded input sections
+
+ .text.unused_func1  0x0000000000000000       0x2c /tmp/ccABCDEF.o
+ .text.unused_func2  0x0000000000000000       0x18 /tmp/ccABCDEF.o
+ .rodata.unused_str  0x0000000000000000       0x40 /tmp/cc123456.o
+ .data.unused_var    0x0000000000000000        0x4 /tmp/cc123456.o
+ .bss.unused_buf     0x0000000000000000       0x80 /tmp/cc789012.o
+
+OUTPUT(firmware.elf elf32-littlearm)

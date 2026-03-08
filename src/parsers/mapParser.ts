@@ -102,6 +102,15 @@ export function parseMap(text: string): MemoryLayout {
             }
 
             case State.LINKER_MAP_SECTIONS: {
+                if (/^Discarded input sections\s*$/i.test(trimmed)) {
+                    // Close last section's line range
+                    if (currentSection && currentSection.sourceLine !== undefined && currentSection.sourceLineEnd === undefined) {
+                        currentSection.sourceLineEnd = i - 1;
+                    }
+                    currentSection = undefined;
+                    state = State.DISCARDED_SECTIONS;
+                    break;
+                }
                 if (/^Cross Reference Table/i.test(trimmed)) {
                     // Close last section's line range
                     if (currentSection && currentSection.sourceLine !== undefined && currentSection.sourceLineEnd === undefined) {
