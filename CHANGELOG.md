@@ -2,6 +2,11 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
+## [0.3.3] - 2026-03-07
+
+### Changed
+- Republish with updated changelog
+
 ## [0.3.2] - 2026-03-07
 
 ### Fixed
