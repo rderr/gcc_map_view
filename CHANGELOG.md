@@ -2,6 +2,12 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
+## [0.3.2] - 2026-03-07
+
+### Fixed
+- Discarded input sections incorrectly appearing in memory regions starting at address 0x0
+- serialize-javascript RCE vulnerability (Dependabot alert #11)
+
 ## [0.3.0] - 2026-02-28
 
 ### Added
