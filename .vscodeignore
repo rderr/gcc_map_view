@@ -14,3 +14,4 @@ tsconfig.test.json
 !out/**
 out/**/*.map
 Screenshot*.png
+CLAUDE.md
