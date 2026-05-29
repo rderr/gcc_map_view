@@ -277,3 +277,53 @@ describe('parseMap — region at address 0x0 with discarded sections', () => {
         assert.ok(sectionNames.includes('.bss'), '.bss should be in RAM');
     });
 });
+
+describe('parseMap - Renesas section names', () => {
+    let result: ReturnType<typeof parseMap>;
+
+    before(() => {
+        result = parseMap([
+            'Memory Configuration',
+            '',
+            'Name             Origin             Length             Attributes',
+            'RAM              0x22000000         0x00001000         xrw',
+            'FLASH            0x02000000         0x00001000         xr',
+            '',
+            'Linker script and memory map',
+            '',
+            '__ram_from_flash$$',
+            '                0x22000000        0x10 load address 0x02000064',
+            '                0x22000000                        __ram_from_flash$$Base = .',
+            ' *(.data*)',
+            ' .data.foo       0x22000000        0x10 foo.o',
+            '                0x22000010                        __ram_from_flash$$Limit = .',
+            '',
+            '__ram_from_ospi0_cs1$$',
+            '                0x22000010        0x0 load address 0x90000000',
+            '                0x22000010                        __ram_from_ospi0_cs1$$Base = .',
+            ' *(.ram_from_ospi0_cs1)',
+            '                0x22000010                        __ram_from_ospi0_cs1$$Limit = .',
+            '',
+        ].join('\n'));
+    });
+
+    it('should parse non-dot output sections', () => {
+        const names = result.sections.map(s => s.name);
+        assert.ok(names.includes('__ram_from_flash$$'), 'missing __ram_from_flash$$');
+        assert.ok(names.includes('__ram_from_ospi0_cs1$$'), 'missing __ram_from_ospi0_cs1$$');
+    });
+
+    it('should parse symbols inside Renesas output sections', () => {
+        const ramFromFlash = result.sections.find(s => s.name === '__ram_from_flash$$')!;
+        assert.strictEqual(ramFromFlash.symbols.length, 1);
+        assert.strictEqual(ramFromFlash.symbols[0].name, '.data.foo');
+        assert.strictEqual(ramFromFlash.symbols[0].address, 0x22000000);
+    });
+
+    it('should assign zero-sized Renesas sections to their address region', () => {
+        const ramFromOspi = result.sections.find(s => s.name === '__ram_from_ospi0_cs1$$')!;
+        const ram = result.regions.find(r => r.name === 'RAM')!;
+        assert.strictEqual(ramFromOspi.region, 'RAM');
+        assert.ok(ram.sections.some(s => s.name === '__ram_from_ospi0_cs1$$'));
+    });
+});
