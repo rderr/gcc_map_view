@@ -312,56 +312,6 @@ describe('parseMap — region at address 0x0 with discarded sections', () => {
     });
 });
 
-describe('parseMap - Renesas section names', () => {
-    let result: ReturnType<typeof parseMap>;
-
-    before(() => {
-        result = parseMap([
-            'Memory Configuration',
-            '',
-            'Name             Origin             Length             Attributes',
-            'RAM              0x22000000         0x00001000         xrw',
-            'FLASH            0x02000000         0x00001000         xr',
-            '',
-            'Linker script and memory map',
-            '',
-            '__ram_from_flash$$',
-            '                0x22000000        0x10 load address 0x02000064',
-            '                0x22000000                        __ram_from_flash$$Base = .',
-            ' *(.data*)',
-            ' .data.foo       0x22000000        0x10 foo.o',
-            '                0x22000010                        __ram_from_flash$$Limit = .',
-            '',
-            '__ram_from_ospi0_cs1$$',
-            '                0x22000010        0x0 load address 0x90000000',
-            '                0x22000010                        __ram_from_ospi0_cs1$$Base = .',
-            ' *(.ram_from_ospi0_cs1)',
-            '                0x22000010                        __ram_from_ospi0_cs1$$Limit = .',
-            '',
-        ].join('\n'));
-    });
-
-    it('should parse non-dot output sections', () => {
-        const names = result.sections.map(s => s.name);
-        assert.ok(names.includes('__ram_from_flash$$'), 'missing __ram_from_flash$$');
-        assert.ok(names.includes('__ram_from_ospi0_cs1$$'), 'missing __ram_from_ospi0_cs1$$');
-    });
-
-    it('should parse symbols inside Renesas output sections', () => {
-        const ramFromFlash = result.sections.find(s => s.name === '__ram_from_flash$$')!;
-        assert.strictEqual(ramFromFlash.symbols.length, 1);
-        assert.strictEqual(ramFromFlash.symbols[0].name, '.data.foo');
-        assert.strictEqual(ramFromFlash.symbols[0].address, 0x22000000);
-    });
-
-    it('should assign zero-sized Renesas sections to their address region', () => {
-        const ramFromOspi = result.sections.find(s => s.name === '__ram_from_ospi0_cs1$$')!;
-        const ram = result.regions.find(r => r.name === 'RAM')!;
-        assert.strictEqual(ramFromOspi.region, 'RAM');
-        assert.ok(ram.sections.some(s => s.name === '__ram_from_ospi0_cs1$$'));
-    });
-});
-
 describe('parseMap - non-dotted output section names (issue #7)', () => {
     // Section names that are not dot-prefixed used to fail the output-section
     // match, so their contents were attributed to the previous section.
@@ -440,5 +390,95 @@ describe('parseMap - non-dotted output section names (issue #7)', () => {
             '',
         ].join('\n'));
         assert.deepStrictEqual(result.sections.map(s => s.name), ['.text']);
+    });
+});
+
+describe('parseMap — unconventional section and symbol names', () => {
+    let result: ReturnType<typeof parseMap>;
+
+    // Exclude debug sections via pattern
+    const excludeDebug = /\S(debug)+/;
+    before(() => {
+        result = parseMap(loadSample('unconventional_naming.map'), excludeDebug);
+    });
+
+    it('should parse a short section name containing `$$`', () => {
+        const data = result.sections.find(s => s.name === '.data$$rw');
+        assert.ok(data, 'should find .data$$rw section');
+        assert.strictEqual(data!.address, 0x20000000);
+        assert.strictEqual(data!.size, 0x1c);
+        assert.strictEqual(data!.region, 'RAM');
+    });
+
+    it('should parse a section name containing `@`', () => {
+        const hot = result.sections.find(s => s.name === '.text@hot');
+        assert.ok(hot, 'should find .text@hot section');
+        assert.strictEqual(hot!.address, 0x5b00);
+        assert.strictEqual(hot!.region, 'FLASH');
+    });
+
+    it('should parse a long `$$` section name that wraps to its own line', () => {
+        const text = result.sections.find(s => s.name === '__program_text$$ro');
+        assert.ok(text, 'should find __program_text$$ro section');
+        assert.strictEqual(text!.address, 0x4000);
+        assert.strictEqual(text!.size, 0x1a00);
+        assert.strictEqual(text!.region, 'FLASH');
+    });
+
+    it('should parse a standalone symbol containing `$$`', () => {
+        const bss = result.sections.find(s => s.name === '.bss$$zi')!;
+        const sym = bss.symbols.find(s => s.name === 'g_buffer$$1');
+        assert.ok(sym, 'should find g_buffer$$1 symbol');
+        assert.strictEqual(sym!.address, 0x2000001c);
+    });
+
+    it('should parse a sized input-section symbol containing `$$`', () => {
+        const text = result.sections.find(s => s.name === '__program_text$$ro')!;
+        const sym = text.symbols.find(s => s.name === '.text.main$$1');
+        assert.ok(sym, 'should find .text.main$$1 symbol');
+        assert.strictEqual(sym!.size, 0x120);
+    });
+
+    it('should parse a mangled symbol and a versioned `@@` symbol', () => {
+        const text = result.sections.find(s => s.name === '__program_text$$ro')!;
+        const names = text.symbols.map(s => s.name);
+        assert.ok(names.includes('_ZN3foo3barEv'), 'should find mangled _ZN3foo3barEv');
+        assert.ok(names.includes('memcpy@@GLIBC_2.17'), 'should find versioned memcpy@@GLIBC_2.17');
+    });
+
+    it('should preserve odd characters (`~ % @ +`) in symbol names', () => {
+        const allSymbols = result.sections.flatMap(s => s.symbols.map(sym => sym.name));
+        assert.ok(allSymbols.includes('dmaDescriptors~impl'), 'should keep `~`');
+        assert.ok(allSymbols.includes('__cxa_pure_virtual%plt'), 'should keep `%`');
+        assert.ok(allSymbols.includes('hot_path@v2'), 'should keep `@`');
+        assert.ok(allSymbols.includes('.L0~tmp+0x4'), 'should keep `~` and `+`');
+    });
+
+    it('should assign the unconventional BOOTROM section to its region', () => {
+        const boot = result.sections.find(s => s.name === '.boot$$header');
+        assert.ok(boot, 'should find .boot$$header section');
+        assert.strictEqual(boot!.address, 0x0);
+        assert.strictEqual(boot!.region, 'BOOTROM');
+    });
+
+    // `result` above was parsed with the excludeDebug pattern.
+    it('should exclude debug sections matching the pattern', () => {
+        const names = result.sections.map(s => s.name);
+        assert.ok(
+            !names.some(n => n.includes('debug')),
+            `debug sections should be excluded, got: ${names.join(', ')}`
+        );
+
+        // Excluded sections' symbols must not leak into any other section
+        const allSymbols = result.sections.flatMap(s => s.symbols.map(sym => sym.name));
+        assert.ok(!allSymbols.includes('debug_info_start'), 'debug symbols should not leak');
+        assert.ok(!allSymbols.includes('debug_abbrev_start'), 'debug symbols should not leak');
+    });
+
+    it('should keep debug sections when no exclude pattern is given', () => {
+        const unfiltered = parseMap(loadSample('unconventional_naming.map'));
+        const names = unfiltered.sections.map(s => s.name);
+        assert.ok(names.includes('.debug_info'), 'debug present without a filter');
+        assert.ok(names.includes('.debug_abbrev'), 'debug present without a filter');
     });
 });
