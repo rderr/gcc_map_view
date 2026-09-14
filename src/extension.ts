@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { parseLd } from './parsers/ldParser';
-import { parseMap, isGccMapFile } from './parsers/mapParser';
+import { parseMap, isGccMapFile, isJsSourceMap } from './parsers/mapParser';
 import { MemoryMapPanel } from './providers/memoryMapPanel';
 import { MemoryLayout } from './models/types';
 import { extractSourceName, extractSymbolName, hexVariants } from './util/symbols';
@@ -21,6 +21,10 @@ let activeDecorations: vscode.TextEditorDecorationType[] = [];
 // Cache to avoid redundant re-parsing when the document hasn't changed
 let lastParsedUri: string | undefined;
 let lastParsedVersion: number | undefined;
+
+// Unsupported maps we've already warned about, so tabbing back to one doesn't
+// re-prompt on every editor change.
+const warnedUnrecognized = new Set<string>();
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -72,6 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
             // Clear cache to force re-parse
             lastParsedUri = undefined;
             lastParsedVersion = undefined;
+            warnedUnrecognized.clear();
             const editor = vscode.window.activeTextEditor;
             if (editor) {
                 parseDocument(context, editor.document);
@@ -142,6 +147,20 @@ function findSection(sectionName: string) {
     return undefined;
 }
 
+function warnUnrecognizedMap(document: vscode.TextDocument, text: string): void {
+    // JS source maps share the .map extension and are not ours to handle.
+    if (isJsSourceMap(text)) { return; }
+
+    const docUri = document.uri.toString();
+    if (warnedUnrecognized.has(docUri)) { return; }
+    warnedUnrecognized.add(docUri);
+
+    vscode.window.showWarningMessage(
+        `'${path.basename(document.fileName)}' doesn't look like a GCC linker map. ` +
+        'Only GNU ld map files are supported — IAR and Keil formats are not.'
+    );
+}
+
 function parseDocument(context: vscode.ExtensionContext, document: vscode.TextDocument): void {
     const filePath = document.fileName;
     const ext = path.extname(filePath).toLowerCase();
@@ -149,6 +168,11 @@ function parseDocument(context: vscode.ExtensionContext, document: vscode.TextDo
     // Skip re-parsing if the document hasn't changed since last parse
     const docUri = document.uri.toString();
     if (docUri === lastParsedUri && document.version === lastParsedVersion) {
+        // The layout is still current, so the only work left is restoring a
+        // panel the user closed since the last parse.
+        if (currentLayout && !MemoryMapPanel.getCurrent()) {
+            showMemoryMap(context, currentLayout, path.basename(filePath));
+        }
         return;
     }
 
@@ -162,6 +186,7 @@ function parseDocument(context: vscode.ExtensionContext, document: vscode.TextDo
     } else if (ext === '.map') {
         // Verify it's a GCC linker map, not a JS source map
         if (!isGccMapFile(text)) {
+            warnUnrecognizedMap(document, text);
             return;
         }
         layout = parseMap(text);

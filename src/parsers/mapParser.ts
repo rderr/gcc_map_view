@@ -14,6 +14,12 @@ export function isGccMapFile(text: string): boolean {
     return /^Memory Configuration/im.test(text);
 }
 
+export function isJsSourceMap(text: string): boolean {
+    // JS source maps are JSON and share the .map extension; no linker map
+    // of any toolchain starts with '{'.
+    return text.slice(0, 64).trimStart().startsWith('{');
+}
+
 export function parseMap(text: string): MemoryLayout {
     const regions: MemoryRegion[] = [];
     const sections: Section[] = [];

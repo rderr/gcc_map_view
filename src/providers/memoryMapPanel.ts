@@ -39,14 +39,17 @@ export class MemoryMapPanel {
         const column = vscode.ViewColumn.Beside;
 
         if (MemoryMapPanel.currentPanel) {
-            MemoryMapPanel.currentPanel.panel.reveal(column);
+            MemoryMapPanel.currentPanel.panel.reveal(column, true);
             return MemoryMapPanel.currentPanel;
         }
 
+        // preserveFocus keeps the cursor in the source editor. Without it the
+        // panel's group becomes active and the next Explorer click opens a
+        // duplicate editor there instead of reusing the original.
         const panel = vscode.window.createWebviewPanel(
             'gccMemoryMap',
             'Memory Map',
-            column,
+            { viewColumn: column, preserveFocus: true },
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,

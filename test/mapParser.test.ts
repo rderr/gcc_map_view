@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseMap, isGccMapFile } from '../src/parsers/mapParser';
+import { parseMap, isGccMapFile, isJsSourceMap } from '../src/parsers/mapParser';
 
 const SAMPLES_DIR = path.join(__dirname, '..', '..', 'samples');
 
@@ -17,6 +17,40 @@ describe('isGccMapFile', () => {
 
     it('should reject a non-map file', () => {
         assert.strictEqual(isGccMapFile('hello world\nfoo bar\n'), false);
+    });
+});
+
+describe('isJsSourceMap', () => {
+    it('should detect a JS source map', () => {
+        const text = '{"version":3,"sources":["a.ts"],"mappings":"AAAA"}';
+        assert.strictEqual(isJsSourceMap(text), true);
+    });
+
+    it('should detect a pretty-printed JS source map', () => {
+        const text = '\n  {\n    "version": 3,\n    "mappings": "AAAA"\n  }\n';
+        assert.strictEqual(isJsSourceMap(text), true);
+    });
+
+    it('should not treat a GCC map as a JS source map', () => {
+        assert.strictEqual(isJsSourceMap(loadSample('stm32f4.map')), false);
+    });
+
+    it('should not treat an IAR-style map as a JS source map', () => {
+        const text = [
+            '###############################################################################',
+            '#',
+            '# IAR ELF Linker V9.60.1.354/W64 for ARM',
+            '#',
+            '###############################################################################',
+            '',
+            '*******************************************************************************',
+            '*** PLACEMENT SUMMARY',
+            '***',
+            '',
+            '"A1":  place at 0x08000000 { ro section .intvec };',
+        ].join('\n');
+        assert.strictEqual(isJsSourceMap(text), false);
+        assert.strictEqual(isGccMapFile(text), false);
     });
 });
 
