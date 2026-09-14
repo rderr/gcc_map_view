@@ -2,6 +2,17 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
+## [0.3.4] - 2026-09-13
+
+### Added
+- Support for Renesas-style `__name$$` output sections
+
+### Fixed
+- Output sections with non-dotted names (`ram_code`, `__ram_noinit$$`) were parsed as part of the preceding section, misreporting sizes and symbol placement (#7)
+- Opening an unsupported map format (IAR, Keil) did nothing and gave no explanation; the extension now reports why (#9)
+- Memory map panel did not reopen when re-selecting a map file after the panel had been closed
+- Memory map panel took focus when opened, so the next Explorer click opened a duplicate editor beside it
+
 ## [0.3.3] - 2026-03-07
 
 ### Changed
