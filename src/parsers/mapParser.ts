@@ -124,7 +124,7 @@ export function parseMap(text: string): MemoryLayout {
                 // Format: ".text           0x00000000    0x1234"
                 // Sometimes section name is on its own line, address+size on next
                 const outputSectionMatch = line.match(
-                    /^(\.[a-zA-Z_][\w.]*)\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
+                    /^((?:\.[a-zA-Z_][\w.]*)|(?:__[A-Za-z0-9_]+\$\$))\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
                 );
                 if (outputSectionMatch) {
                     // Close previous section's line range
@@ -144,7 +144,9 @@ export function parseMap(text: string): MemoryLayout {
                 }
 
                 // Section name alone on a line (long name wraps)
-                const sectionNameOnly = line.match(/^(\.[a-zA-Z_][\w.]*)\s*$/);
+                const sectionNameOnly = line.match(
+                    /^((?:\.[a-zA-Z_][\w.]*)|(?:__[A-Za-z0-9_]+\$\$))\s*$/
+                );
                 if (sectionNameOnly) {
                     // Peek at next line for address+size
                     if (i + 1 < lines.length) {
@@ -254,7 +256,7 @@ export function parseMap(text: string): MemoryLayout {
 
     // Assign sections to regions by address range
     for (const section of sections) {
-        if (section.size === 0) { continue; }
+        if (section.size === 0 && !/^__[A-Za-z0-9_]+\$\$$/.test(section.name)) { continue; }
         for (const region of regions) {
             const regionEnd = region.origin + region.length;
             if (section.address >= region.origin && section.address < regionEnd) {
