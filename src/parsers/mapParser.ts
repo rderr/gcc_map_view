@@ -126,11 +126,14 @@ export function parseMap(text: string): MemoryLayout {
                     break;
                 }
 
-                // Output section header: starts at column 0 with .name
+                // Output section header: starts at column 0.
                 // Format: ".text           0x00000000    0x1234"
-                // Sometimes section name is on its own line, address+size on next
+                // Sometimes section name is on its own line, address+size on next.
+                // Names are not always dotted — Renesas emits "__ram_noinit$$"
+                // and plain identifiers are legal — so match the name broadly
+                // and let the required address+size rule out prose lines.
                 const outputSectionMatch = line.match(
-                    /^((?:\.[a-zA-Z_][\w.]*)|(?:__[A-Za-z0-9_]+\$\$))\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
+                    /^([A-Za-z_.$][\w.$-]*)\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
                 );
                 if (outputSectionMatch) {
                     // Close previous section's line range
@@ -149,10 +152,9 @@ export function parseMap(text: string): MemoryLayout {
                     break;
                 }
 
-                // Section name alone on a line (long name wraps)
-                const sectionNameOnly = line.match(
-                    /^((?:\.[a-zA-Z_][\w.]*)|(?:__[A-Za-z0-9_]+\$\$))\s*$/
-                );
+                // Section name alone on a line (long name wraps). Only
+                // committed if the next line supplies address+size.
+                const sectionNameOnly = line.match(/^([A-Za-z_.$][\w.$-]*)\s*$/);
                 if (sectionNameOnly) {
                     // Peek at next line for address+size
                     if (i + 1 < lines.length) {

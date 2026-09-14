@@ -361,3 +361,84 @@ describe('parseMap - Renesas section names', () => {
         assert.ok(ram.sections.some(s => s.name === '__ram_from_ospi0_cs1$$'));
     });
 });
+
+describe('parseMap - non-dotted output section names (issue #7)', () => {
+    // Section names that are not dot-prefixed used to fail the output-section
+    // match, so their contents were attributed to the previous section.
+    function buildMap(sectionName: string): string {
+        return [
+            'Memory Configuration',
+            '',
+            'Name             Origin             Length             Attributes',
+            'RAM              0x1ffe0000         0x00040000         xrw',
+            '',
+            'Linker script and memory map',
+            '',
+            '.boot_state_sect',
+            '                0x1ffe16c0        0x4 load address 0x00041641',
+            ' .boot_state_sect',
+            '                0x1ffe16c0        0x4 ./src/common/common.o',
+            '                0x1ffe16c0                boot_state',
+            '',
+            sectionName + '  0x1ffe16c8     0x5218 load address 0x00041645',
+            '                0x1ffe16c8                        noinit_buffer',
+            '',
+        ].join('\n');
+    }
+
+    it('should not leak contents into the previous section', () => {
+        const result = parseMap(buildMap('__ram_noinit$$'));
+        const prev = result.sections.find(s => s.name === '.boot_state_sect')!;
+        assert.ok(
+            !prev.symbols.some(s => s.name === 'noinit_buffer'),
+            'noinit_buffer leaked into .boot_state_sect'
+        );
+    });
+
+    it('should parse the section with its own address and size', () => {
+        const result = parseMap(buildMap('__ram_noinit$$'));
+        const sect = result.sections.find(s => s.name === '__ram_noinit$$')!;
+        assert.ok(sect, '__ram_noinit$$ not parsed');
+        assert.strictEqual(sect.address, 0x1ffe16c8);
+        assert.strictEqual(sect.size, 0x5218);
+        assert.strictEqual(sect.symbols[0].name, 'noinit_buffer');
+    });
+
+    const names = [
+        'ram_code',
+        'RAMCODE',
+        '_fast_code',
+        '__ram_noinit$',
+        '__ram$$noinit',
+        '.ram_noinit$$',
+    ];
+    for (const name of names) {
+        it(`should parse section named ${name}`, () => {
+            const result = parseMap(buildMap(name));
+            const sect = result.sections.find(s => s.name === name);
+            assert.ok(sect, `${name} was not parsed as its own section`);
+            assert.strictEqual(sect!.address, 0x1ffe16c8);
+        });
+    }
+
+    it('should not treat linker script prose as a section', () => {
+        const result = parseMap([
+            'Memory Configuration',
+            '',
+            'Name             Origin             Length             Attributes',
+            'RAM              0x1ffe0000         0x00040000         xrw',
+            '',
+            'Linker script and memory map',
+            '',
+            'LOAD ./src/common/common.o',
+            'START GROUP',
+            'OUTPUT(firmware.elf elf32-littlearm)',
+            'END GROUP',
+            '',
+            '.text           0x1ffe0000        0x40',
+            '                0x1ffe0000                _start',
+            '',
+        ].join('\n'));
+        assert.deepStrictEqual(result.sections.map(s => s.name), ['.text']);
+    });
+});
