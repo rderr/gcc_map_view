@@ -20,7 +20,7 @@ export function isJsSourceMap(text: string): boolean {
     return text.slice(0, 64).trimStart().startsWith('{');
 }
 
-export function parseMap(text: string): MemoryLayout {
+export function parseMap(text: string, excludeSections?: RegExp): MemoryLayout {
     const regions: MemoryRegion[] = [];
     const sections: Section[] = [];
     let discardedSize = 0;
@@ -30,7 +30,6 @@ export function parseMap(text: string): MemoryLayout {
     let currentSection: Section | undefined;
     let pendingSymbolName: string | undefined;
     let pendingSymbolLine: number = 0;
-
     const lines = text.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
@@ -129,11 +128,12 @@ export function parseMap(text: string): MemoryLayout {
                 // Output section header: starts at column 0.
                 // Format: ".text           0x00000000    0x1234"
                 // Sometimes section name is on its own line, address+size on next.
-                // Names are not always dotted — Renesas emits "__ram_noinit$$"
-                // and plain identifiers are legal — so match the name broadly
-                // and let the required address+size rule out prose lines.
+                // binutils ld does not prescribe a section naming convention,
+                // but it does fixate the name column at 15 chars — names past
+                // that wrap to their own line — so match on that width instead
+                // of assuming a dotted/identifier-style name.
                 const outputSectionMatch = line.match(
-                    /^([A-Za-z_.$][\w.$-]*)\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
+                    /^(\S{1,14})\s+(0x[0-9a-fA-F]+)\s+(0x[0-9a-fA-F]+)/
                 );
                 if (outputSectionMatch) {
                     // Close previous section's line range
@@ -147,14 +147,17 @@ export function parseMap(text: string): MemoryLayout {
                         symbols: [],
                         sourceLine: i,
                     };
-                    sections.push(currentSection);
-                    pendingSymbolName = undefined;
-                    break;
+                    if (excludeSections == undefined || !currentSection.name.match(excludeSections)) {
+                        sections.push(currentSection);
+                        pendingSymbolName = undefined;
+                        break;
+                    }
                 }
 
-                // Section name alone on a line (long name wraps). Only
-                // committed if the next line supplies address+size.
-                const sectionNameOnly = line.match(/^([A-Za-z_.$][\w.$-]*)\s*$/);
+                // Section name alone on a line (long name wraps)
+                const sectionNameOnly = line.match(
+                    /^([\S]{15,})\s*$/
+                );
                 if (sectionNameOnly) {
                     // Peek at next line for address+size
                     if (i + 1 < lines.length) {
@@ -174,9 +177,11 @@ export function parseMap(text: string): MemoryLayout {
                                 symbols: [],
                                 sourceLine: i,
                             };
-                            sections.push(currentSection);
-                            pendingSymbolName = undefined;
-                            i++; // skip the next line
+                            if (excludeSections == undefined || !currentSection.name.match(excludeSections)) {
+                                sections.push(currentSection);
+                                pendingSymbolName = undefined;
+                                i++; // skip the next line
+                            }
                         }
                     }
                     break;
@@ -264,7 +269,7 @@ export function parseMap(text: string): MemoryLayout {
 
     // Assign sections to regions by address range
     for (const section of sections) {
-        if (section.size === 0 && !/^__[A-Za-z0-9_]+\$\$$/.test(section.name)) { continue; }
+        if (section.size === 0) { continue; }
         for (const region of regions) {
             const regionEnd = region.origin + region.length;
             if (section.address >= region.origin && section.address < regionEnd) {

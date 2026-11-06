@@ -81,6 +81,15 @@
           "when": "gccMapView.hasLayout && resourceExtname =~ /\\.(c|cpp|cc|cxx|h|hpp|hxx|hh|s|S|asm|rs|zig|d)$/"
         }
       ]
+    },
+    "configuration": {
+      "properties": {
+        "gccMapView.excludeSections": {
+          "type": "string",
+          "default": "",
+          "description": "RegExp section exclusion (note: use json escape char's)"
+        }
+      }
     }
   },
   "scripts": {

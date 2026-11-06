@@ -2,10 +2,17 @@
 
 All notable changes to the GCC Map View extension will be documented in this file.
 
-## [0.3.4] - 2026-09-13
+## [Unreleased]
+
+### Changed
+- Fixed the [issue #7](https://github.com/rderr/gcc_map_view/issues/7) that unconventional section naming schemes are not parsed and thus excluded.
+    - The [binutuls ld]() linker does not prescribe a convention.
+    - `ld` does fixate on max section name size (15) so now fixating.
 
 ### Added
-- Support for Renesas-style `__name$$` output sections
+- A settings entry called `gccMapView.excludeSections` where a RegEx section exclude string can be given to e.g. exclude debug or arm sections from being included in the map view.
+
+## [0.3.4] - 2026-09-13
 
 ### Fixed
 - Output sections with non-dotted names (`ram_code`, `__ram_noinit$$`) were parsed as part of the preceding section, misreporting sizes and symbol placement (#7)
